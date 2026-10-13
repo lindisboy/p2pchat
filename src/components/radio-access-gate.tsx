@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, AppState, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Brand } from '@/components/brand';
+import { StatusBar } from 'expo-status-bar';
 import { Button } from '@/components/ui';
-import { Radius, Spacing, Type } from '@/constants/theme';
+import { Colors, Radius, Spacing, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useI18n } from '@/i18n/provider';
 import {
@@ -94,7 +96,6 @@ export function RadioAccessGate({
       if (!mounted.current) return;
       setStatus(next);
       if (next.state !== 'ready') {
-        setAdmitted(false);
         return;
       }
       await startRadio();
@@ -153,31 +154,28 @@ export function RadioAccessGate({
     void request();
   }, [appReady, busy, request, status]);
 
-  if (appReady && status?.state === 'ready' && admitted) return children;
+  if (appReady && admitted) return children;
 
   const copy = copyFor(status, appReady, permissionRequested, copyText);
   const openSettings = (status?.state === 'unauthorized' && permissionRequested) ||
     (Platform.OS === 'ios' && status?.state === 'poweredOff');
 
   return (
-    <View
+    <View style={{ flex: 1, backgroundColor: t.bg, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+    <ScrollView
       accessibilityViewIsModal
-      style={[
+      style={{ flex: 1, backgroundColor: t.bg }}
+      contentContainerStyle={[
         styles.root,
         {
           backgroundColor: t.bg,
-          paddingTop: insets.top + Spacing.xxl,
-          paddingBottom: insets.bottom + Spacing.xl,
+          paddingTop: Spacing.xxl,
+          paddingBottom: Spacing.xl,
         },
       ]}>
+      <StatusBar style={t.bg === Colors.dark.bg ? 'light' : 'dark'} />
       <View style={styles.content}>
-        <View
-          style={[
-            styles.icon,
-            { backgroundColor: t.tone.caution.tint, borderColor: t.tone.caution.edge },
-          ]}>
-          <Text accessibilityElementsHidden style={[styles.bluetooth, { color: t.tone.caution.fg }]}>B</Text>
-        </View>
+        <Brand texture />
         <Text accessibilityRole="header" style={[Type.hero, styles.center, { color: t.text }]}>
           {copy.title}
         </Text>
@@ -187,6 +185,7 @@ export function RadioAccessGate({
         )}
       </View>
 
+      <View style={{ gap: Spacing.sm }}>
       {!!copy.action && !busy && (
         <Button
           title={copy.action}
@@ -196,18 +195,25 @@ export function RadioAccessGate({
           }}
         />
       )}
+      {appReady && !busy && status?.state !== 'resetting' && (
+        <Button title={copyText('radio.offlineAction')} variant="secondary" onPress={() => setAdmitted(true)} />
+      )}
+      </View>
+    </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: Spacing.xl,
     justifyContent: 'space-between',
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
+    paddingVertical: Spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.lg,

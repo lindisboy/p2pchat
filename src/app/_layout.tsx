@@ -2,6 +2,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
+import { ActivityIndicator, View } from 'react-native';
 
 import { Colors, Type } from '@/constants/theme';
 import { useIsDark } from '@/hooks/use-theme';
@@ -10,9 +12,17 @@ import { AccessGate } from '@/components/access-gate';
 import { AppProvider } from '@/lib/app-state';
 
 export default function RootLayout() {
+  const [loaded, error] = useFonts({
+    Anton: require('../../assets/branding/p2pchat/source/Anton-Regular.ttf'),
+    Inter: require('../../assets/branding/p2pchat/source/Inter.ttf'),
+  });
+  const dark = useIsDark();
+  const theme = dark ? Colors.dark : Colors.light;
+  if (!loaded && !error) return <View style={{ flex: 1, backgroundColor: theme.bg, justifyContent: 'center' }}><ActivityIndicator color={theme.accent} /></View>;
   return (
     <I18nProvider>
       <SafeAreaProvider>
+        <StatusBar style="auto" />
         <AccessGate>
           <LocalizedLayout />
         </AccessGate>
@@ -33,7 +43,6 @@ function LocalizedLayout() {
           Keyboard JS events do not reliably report the IME, so this is the only
           thing that actually moves the composer above the keyboard. */}
         <AppProvider>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: t.bg },
@@ -42,6 +51,7 @@ function LocalizedLayout() {
             statusBarStyle: isDark ? 'light' : 'dark',
             headerTintColor: t.accent,
             headerTitleStyle: {
+              fontFamily: 'Inter',
               color: t.text,
               fontSize: Type.heading.fontSize,
               fontWeight: Type.heading.fontWeight,

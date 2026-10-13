@@ -1,6 +1,15 @@
-import type { Catalog } from './en';
+import type {
+ Catalog } from './en';
 
 export const te: Catalog = {
+  'radio.offlineAction': "Bluetooth లేకుండా కొనసాగించండి",
+  'settings.relayTitle': "సమీప రిలే",
+  'settings.relayDetail': "సమీపంలోని ఇతరుల ఎన్‌క్రిప్ట్ చేసిన సందేశాలను చేరవేయండి. దీనికి నిల్వ, బ్యాటరీ అవసరం; Bluetooth కార్యకలాపాలను గుర్తించవచ్చు. రిలే ఆఫ్‌లో ఉన్నా మీ చాట్‌లు పనిచేస్తాయి.",
+  'settings.relayConsent': "సమీప రిలేను ఆన్ చేయాలా?",
+  'settings.relayError': "రిలే ఎంపికను సేవ్ చేయలేకపోయాం.",
+  'settings.internetTitle': "ఇంటర్నెట్‌కు పంపడం",
+  'settings.internetDetail': "ఈ బిల్డ్‌లో అందుబాటులో లేదు. ఇంటర్నెట్ ద్వారా సందేశాలు పంపే సదుపాయం ఇంకా అమలు కాలేదు.",
+
   'common.addPerson': 'ఒకరిని జోడించండి', 'common.cancel': 'రద్దు చేయండి', 'common.chat': 'చాట్',
   'common.couldNotJoin': 'చేరలేకపోయాం.', 'common.couldNotSend': 'పంపలేకపోయాం.',
   'common.deleteEverything': 'అన్నీ తొలగించండి', 'common.failed': 'విఫలమైంది', 'common.group': 'గ్రూప్',

@@ -2,9 +2,9 @@
   "expo": {
     "name": "p2pchat",
     "slug": "p2pchat",
-    "version": "1.0.0",
+    "version": "0.2.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/branding/p2pchat/app-icon.png",
     "scheme": "p2pchat",
     "userInterfaceStyle": "automatic",
     "locales": {
@@ -16,7 +16,7 @@
       "ta": "./locales/ta.json"
     },
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/branding/p2pchat/app-icon.png",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "p2pchat uses Bluetooth to find nearby phones and pass messages without the internet. This can use more battery, and nearby radio scanners can detect Bluetooth activity. The app does not use GPS.",
         "NSBluetoothPeripheralUsageDescription": "p2pchat advertises over Bluetooth Low Energy so nearby phones can find this one and relay messages without the internet. The advertised identifier is random and changes every 15 minutes.",
@@ -30,10 +30,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#F3F0E8",
+        "foregroundImage": "./assets/branding/p2pchat/native/android-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.p2pchat",
@@ -43,20 +41,25 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
-      "allowBackup": false
+      "allowBackup": false,
+      "versionCode": 2
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/branding/p2pchat/app-icon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#F3F0E8",
+          "image": "./assets/branding/p2pchat/logo-paper.png",
+          "imageWidth": 240,
+          "dark": {
+            "backgroundColor": "#17252C",
+            "image": "./assets/branding/p2pchat/logo-reverse.png"
+          }
         }
       ],
       [
@@ -100,7 +103,9 @@
             ]
           }
         }
-      ]
+      ],
+      "./plugins/withSystemBarContrast",
+      "./plugins/withBuildPathPrivacy"
     ],
     "experiments": {
       "typedRoutes": true,

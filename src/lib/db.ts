@@ -716,20 +716,20 @@ export async function pendingEnvelopes(limit = 200): Promise<Envelope[]> {
     .filter((e): e is Envelope => e !== null);
 }
 
-export async function envelopeIds(): Promise<string[]> {
+export async function envelopeIds(oursOnly = false): Promise<string[]> {
   const d = await getDb();
-  const rows = await d.getAllAsync<any>(`SELECT id FROM envelopes WHERE expires_at > ?`, [
+  const rows = await d.getAllAsync<any>(`SELECT id FROM envelopes WHERE expires_at > ?${oursOnly ? ' AND is_ours = 1' : ''}`, [
     Date.now(),
   ]);
   return rows.map((r) => r.id);
 }
 
-export async function getEnvelopesByIds(ids: string[]): Promise<Envelope[]> {
+export async function getEnvelopesByIds(ids: string[], oursOnly = false): Promise<Envelope[]> {
   if (ids.length === 0) return [];
   const d = await getDb();
   const placeholders = ids.map(() => '?').join(',');
   const rows = await d.getAllAsync<any>(
-    `SELECT raw FROM envelopes WHERE id IN (${placeholders}) AND expires_at > ?`,
+    `SELECT raw FROM envelopes WHERE id IN (${placeholders}) AND expires_at > ?${oursOnly ? ' AND is_ours = 1' : ''}`,
     [...ids, Date.now()],
   );
   return rows

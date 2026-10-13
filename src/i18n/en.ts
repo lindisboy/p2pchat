@@ -1,4 +1,12 @@
 export const en = {
+  'radio.offlineAction': "Continue without Bluetooth",
+  'settings.relayTitle': "Nearby relay",
+  'settings.relayDetail': "Carry encrypted messages for other people nearby. This uses storage and battery; Bluetooth activity can be detected. Your own chats work with relay off.",
+  'settings.relayConsent': "Enable nearby relay?",
+  'settings.relayError': "Could not save relay preference.",
+  'settings.internetTitle': "Internet forwarding",
+  'settings.internetDetail': "Unavailable in this build. Internet transport is not implemented yet.",
+
   'common.addPerson': 'Add a person',
   'common.cancel': 'Cancel',
   'common.chat': 'Chat',

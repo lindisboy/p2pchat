@@ -41,6 +41,7 @@ import type { MeshStatus } from './mesh';
 import { mesh, shortName } from './mesh';
 import { LocalPrekeys, PeerPrekeyBook } from './prekeys';
 
+const RELAY_KEY = 'p2pchat.nearby-relay.v1';
 const NAME_KEY = 'protestchat.displayName.v1';
 
 type AppContextValue = {
@@ -63,6 +64,8 @@ type AppContextValue = {
 
   startRadio: () => Promise<void>;
   stopRadio: () => Promise<void>;
+  nearbyRelay: boolean;
+  setNearbyRelay: (enabled: boolean) => Promise<void>;
 
   /**
    * Sends to any conversation. The prefix decides the mode:
@@ -99,6 +102,19 @@ const EMPTY_STATUS: MeshStatus = {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
+  const [nearbyRelay, setRelay] = useState(false);
+  const relayEpoch = useRef(0);
+  const setNearbyRelay = useCallback(async (enabled: boolean) => {
+    const epoch = relayEpoch.current;
+    if (!enabled) { mesh.setRelayEnabled(false); setRelay(false); }
+    await SecureStore.setItemAsync(RELAY_KEY, enabled ? 'yes' : 'no');
+    if (epoch !== relayEpoch.current) {
+      await SecureStore.deleteItemAsync(RELAY_KEY);
+      return;
+    }
+    mesh.setRelayEnabled(enabled);
+    setRelay(enabled);
+  }, []);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [displayName, setName] = useState('anon');
   const [status, setStatus] = useState<MeshStatus>(EMPTY_STATUS);
@@ -161,6 +177,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await db.upsertChannel(PUBLIC_CHANNEL_NAME, PUBLIC_CHANNEL_NAME, 'public', PUBLIC_CHANNEL_KEY);
 
       const id = await loadOrCreateIdentity();
+      const relayConsent = (await SecureStore.getItemAsync(RELAY_KEY)) === 'yes';
+      if (cancelled) return;
+      mesh.setRelayEnabled(relayConsent);
+      setRelay(relayConsent);
       const storedName = await SecureStore.getItemAsync(NAME_KEY);
       const name = storedName ?? shortName(id.publicId);
       if (!storedName) await SecureStore.setItemAsync(NAME_KEY, name);
@@ -389,7 +409,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    mesh.setRelayEnabled(false);
+    setRelay(false);
+    relayEpoch.current++;
     await wipeStep('identity seed', () => destroyIdentity());
+    await wipeStep('relay consent', () => SecureStore.deleteItemAsync(RELAY_KEY));
     await wipeStep('display name', () => SecureStore.deleteItemAsync(NAME_KEY));
     // Drop live mesh secrets *before* the DB wipe and *before* awaiting
     // transport.stop(). stop() can hang on wedged BLE; without this gate,
@@ -456,6 +480,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       groups,
       startRadio,
       stopRadio,
+      nearbyRelay,
+      setNearbyRelay,
       sendText,
       joinChannel,
       leaveChannel,
@@ -481,6 +507,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       groups,
       startRadio,
       stopRadio,
+      nearbyRelay,
+      setNearbyRelay,
       sendText,
       joinChannel,
       leaveChannel,

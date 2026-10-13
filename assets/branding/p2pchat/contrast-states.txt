@@ -1,0 +1,18 @@
+light primary: 5.32:1 PASS
+light primary-hover: 7.27:1 PASS
+light primary-active: 9.16:1 PASS
+light destructive: 5.47:1 PASS
+light clay on page: 5.47:1 PASS
+light ochre on page: 4.69:1 PASS
+light slate on page: 6.01:1 PASS
+light plum on page: 5.78:1 PASS
+dark primary: 9.09:1 PASS
+dark primary-hover: 10.58:1 PASS
+dark primary-active: 11.70:1 PASS
+dark destructive: 7.58:1 PASS
+dark clay on page: 7.58:1 PASS
+dark ochre on page: 8.98:1 PASS
+dark slate on page: 8.62:1 PASS
+dark plum on page: 8.08:1 PASS
+teal 500 on white: 5.13:1 PASS
+teal 600 on white: 6.89:1 PASS

@@ -1,19 +1,21 @@
 # p2pchat
 
-Peer-to-peer messaging over Bluetooth Low Energy, with encrypted direct and group messages, passphrase channels, and public broadcasts. Phones carry queued packets between nearby devices without requiring an internet connection or an account.
+Peer-to-peer messaging over Bluetooth Low Energy, with encrypted direct and group messages, passphrase channels, and public broadcasts. With nearby relay enabled, phones carry queued packets between nearby devices without requiring an internet connection or an account.
 
 p2pchat is in early development and has not had an independent security audit. Encryption does not hide radio activity, protect a compromised phone, or stop a recipient from copying a message.
 
 ## Current implementation
 
+- A teal-led brand theme with supporting clay, ochre, slate and plum, supplied artwork, and bundled OFL fonts.
 - Separate private, broadcast, and forum screens with English, Hindi, Bengali, Marathi, Telugu, and Tamil catalogs.
 - Direct messages and group fan-out use individually sealed ciphertexts. Channels use a passphrase-derived key. Public broadcasts are readable by anyone running the app.
+- Nearby relay is off by default, separately consented, and saved on the device. Direct messaging works with relay off. Internet forwarding is unavailable.
 - BLE discovery and framing use local Kotlin and Swift modules. Routing, deduplication, expiry, and message handling run in TypeScript.
 - SQLCipher storage and SecureStore key handling, including migration of the earlier plaintext database.
 - An access PIN gate, decoy PIN behavior, prekey persistence, and in-memory secret clearing. Decoy behavior is not a guarantee of forensic erasure.
 - A 600-packet receive budget per connected-peer session, bounded concurrent processing, and a 50 MB encoded envelope-cache budget.
 
-These are source-level capabilities. Native storage protection, locked-screen relay survival, and cross-platform radio behavior require device verification. See the [threat model](docs/THREAT-MODEL.md) and [phase 2 implementation record](docs/planning/phase-2.md).
+These are source-level capabilities. Native storage protection, locked-screen relay survival, and cross-platform radio behavior require device verification. See the [threat model](docs/THREAT-MODEL.md) and [phase 2 implementation record](docs/planning/phase-2.md) and [phase 3 progress](docs/planning/phase-3.md).
 
 ## Message visibility
 

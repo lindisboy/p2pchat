@@ -113,7 +113,9 @@ export function Button({ title, variant = 'primary', disabled, style, ...rest }:
           : 'transparent';
 
   const fg =
-    variant === 'primary' || variant === 'danger'
+    variant === 'danger'
+      ? t.tone.danger.onFill
+      : variant === 'primary'
       ? t.onAccentFill
       : variant === 'quiet'
         ? t.accent
@@ -128,16 +130,13 @@ export function Button({ title, variant = 'primary', disabled, style, ...rest }:
       style={(state) => [
         styles.button,
         {
-          backgroundColor: bg,
-          // Pressed feedback is opacity only. A scale or a bounce on the send
-          // button would be one more thing moving on a screen someone is
-          // trying to read quickly.
-          opacity: disabled ? 0.4 : state.pressed ? 0.72 : 1,
+          backgroundColor: state.pressed && variant === 'primary' ? t.accentPressed : bg,
+          opacity: disabled ? 0.4 : 1,
         },
         typeof style === 'function' ? style(state) : style,
       ]}
       {...rest}>
-      <Text style={[Type.bodyStrong, { color: fg }]} numberOfLines={1}>
+      <Text style={[Type.bodyStrong, { color: fg, textAlign: 'center' }]}>
         {title}
       </Text>
     </Pressable>
@@ -160,7 +159,7 @@ export const Input = forwardRef<TextInput, TextInputProps>(function Input(props,
       {...props}
       style={[
         styles.input,
-        { backgroundColor: t.surface, borderColor: t.border, color: t.text },
+        { backgroundColor: t.surface, borderColor: t.borderStrong, color: t.text },
         props.style,
       ]}
     />
@@ -180,7 +179,7 @@ export function Field({
   const t = useTheme();
   return (
     <View style={{ gap: Spacing.sm }}>
-      <Text style={[Type.label, { color: t.textMuted }]}>{label.toUpperCase()}</Text>
+      <Text style={[Type.label, { color: t.textMuted }]}>{label}</Text>
       {children}
       {!!hint && <Text style={[Type.caption, { color: t.textMuted }]}>{hint}</Text>}
     </View>
@@ -318,22 +317,23 @@ export function Leading({
   name?: string;
 }) {
   const t = useTheme();
+  const accent = kind === 'broadcast' ? t.clay : kind === 'channel' ? t.ochre : kind === 'group' ? t.plum : t.slate;
   const initial = (name?.trim().charAt(0) ?? '').toUpperCase() || '?';
   return (
     <View
       // Decorative — the name is right beside it in text.
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={[styles.monogram, { backgroundColor: t.surfaceRaised, borderColor: t.border }]}>
+      style={[styles.monogram, { backgroundColor: `${accent}18`, borderColor: accent }]}>
       {kind === 'broadcast' ? (
         // A center dot inside a ring: "radiating outward" without an icon font,
         // and pointedly not a signal-strength or lock glyph.
         <View style={styles.radiate}>
-          <View style={[styles.radiateRing, { borderColor: t.textMuted }]} />
-          <View style={[styles.radiateDot, { backgroundColor: t.textMuted }]} />
+          <View style={[styles.radiateRing, { borderColor: accent }]} />
+          <View style={[styles.radiateDot, { backgroundColor: accent }]} />
         </View>
       ) : (
-        <Text style={[Type.calloutStrong, { color: t.textMuted }]}>
+        <Text style={[Type.calloutStrong, { color: t.text }]}>
           {kind === 'channel' ? '#' : initial}
         </Text>
       )}
@@ -363,7 +363,7 @@ export function Tag({ tone, label }: { tone: ToneName; label: string }) {
   return (
     <View style={[styles.tag, { backgroundColor: c.tint, borderColor: c.edge }]}>
       <View style={[styles.tagDot, { backgroundColor: c.fg }]} />
-      <Text style={[Type.micro, { color: c.fg }]} numberOfLines={1}>
+      <Text style={[Type.micro, { color: tone === 'caution' ? t.text : c.fg }]} numberOfLines={1}>
         {label.toUpperCase()}
       </Text>
     </View>
@@ -401,7 +401,7 @@ export function Notice({
         style,
       ]}>
       {!!title && (
-        <Text style={[Type.calloutStrong, { color: loud ? c.onFill : c.fg }]}>
+        <Text style={[Type.calloutStrong, { color: loud ? c.onFill : t.text }]}>
           {title.toUpperCase()}
         </Text>
       )}
@@ -417,7 +417,7 @@ export function Bullets({ items, color }: { items: string[]; color?: string }) {
     <View style={{ gap: Spacing.sm }}>
       {items.map((line) => (
         <View key={line} style={{ flexDirection: 'row', gap: Spacing.sm }}>
-          <Text style={[Type.callout, { color: color ?? t.textMuted }]}>—</Text>
+          <Text style={[Type.callout, { color: color ?? t.textMuted }]}>•</Text>
           <Text style={[Type.callout, { color: color ?? t.textMuted, flex: 1 }]}>{line}</Text>
         </View>
       ))}
@@ -537,6 +537,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
   },
   input: {
     minHeight: TAP_TARGET,

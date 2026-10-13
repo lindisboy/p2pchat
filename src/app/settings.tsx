@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Bullets, Button, Card, Field, Input, Notice, Screen, Tag } from '@/components/ui';
+import { Brand } from '@/components/brand';
 import { Spacing, TAP_TARGET, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { type LanguagePreference, SUPPORTED_LANGUAGES } from '@/i18n/core';
@@ -38,7 +39,21 @@ const LANGUAGE_NAMES: Record<Exclude<LanguagePreference, 'system'>, string> = {
 export default function SettingsScreen() {
   const t = useTheme();
   const { t: copy, preference, setPreference } = useI18n();
-  const { displayName, setDisplayName, status, startRadio, stopRadio, panicWipe } = useApp();
+  const { displayName, setDisplayName, status, startRadio, stopRadio, panicWipe, nearbyRelay, setNearbyRelay } = useApp();
+  const [relayBusy, setRelayBusy] = useState(false);
+  const saveRelay = async (enabled: boolean) => {
+    setRelayBusy(true);
+    try { await setNearbyRelay(enabled); }
+    catch { Alert.alert(copy('common.failed'), copy('settings.relayError')); }
+    finally { setRelayBusy(false); }
+  };
+  const changeRelay = (enabled: boolean) => {
+    if (!enabled) { void saveRelay(false); return; }
+    Alert.alert(copy('settings.relayConsent'), copy('settings.relayDetail'), [
+      { text: copy('common.cancel'), style: 'cancel' },
+      { text: copy('common.on'), onPress: () => void saveRelay(true) },
+    ]);
+  };
   const [name, setName] = useState(displayName);
   const [languageError, setLanguageError] = useState<string | null>(null);
   const [accessPin, setAccessPin] = useState('');
@@ -127,6 +142,7 @@ export default function SettingsScreen() {
   return (
     <Screen contentStyle={{ gap: Spacing.xl }}>
       <Stack.Screen options={{ title: copy('nav.settings') }} />
+      <Brand texture />
 
       <Card style={{ gap: Spacing.md }}>
         <Text style={[Type.bodyStrong, { color: t.text }]}>{copy('language.title')}</Text>
@@ -261,6 +277,25 @@ export default function SettingsScreen() {
             onValueChange={(on) => void (on ? startRadio() : stopRadio())}
             accessibilityLabel={copy('settings.meshRadio')}
           />
+        </View>
+      </Card>
+
+      <Card style={{ gap: Spacing.lg }}>
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1, gap: Spacing.sm }}>
+            <Text style={[Type.bodyStrong, { color: t.text }]}>{copy('settings.relayTitle')}</Text>
+            <View style={{ alignSelf: 'flex-start' }}>
+              <Tag tone={nearbyRelay ? 'ok' : 'caution'} label={copy(nearbyRelay ? 'common.on' : 'common.off')} />
+            </View>
+            <Text style={[Type.callout, { color: t.textMuted }]}>{copy('settings.relayDetail')}</Text>
+          </View>
+          <Switch value={nearbyRelay} disabled={relayBusy} onValueChange={changeRelay}
+            trackColor={{ false: t.borderStrong, true: t.accentFill }}
+            accessibilityLabel={copy('settings.relayTitle')} />
+        </View>
+        <View style={{ gap: Spacing.sm }}>
+          <Text style={[Type.bodyStrong, { color: t.text }]}>{copy('settings.internetTitle')}</Text>
+          <Text style={[Type.callout, { color: t.textMuted }]}>{copy('settings.internetDetail')}</Text>
         </View>
       </Card>
 

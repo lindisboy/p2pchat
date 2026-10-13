@@ -72,10 +72,10 @@ export const SEEN_RETENTION_MS = 7 * 24 * 3600 * 1000;
  */
 export interface MeshStore {
   sweepExpired(): Promise<void>;
-  envelopeIds(): Promise<string[]>;
+  envelopeIds(oursOnly?: boolean): Promise<string[]>;
   /** False for a duplicate or a full cache. Does not evict existing mail. */
   storeEnvelope(e: Envelope, isOurs?: boolean): Promise<boolean>;
-  getEnvelopesByIds(ids: string[]): Promise<Envelope[]>;
+  getEnvelopesByIds(ids: string[], oursOnly?: boolean): Promise<Envelope[]>;
   /** Returns true only the first time an id is presented. The dedup primitive. */
   markSeen(idB64: string): Promise<boolean>;
   hasSeen(idB64: string): Promise<boolean>;
@@ -195,9 +195,9 @@ export function createMemoryStore(
       }
     },
 
-    async envelopeIds() {
+    async envelopeIds(oursOnly = false) {
       const t = now();
-      return [...envelopes.values()].filter((e) => e.expiresAt > t).map((e) => e.id);
+      return [...envelopes.values()].filter((e) => e.expiresAt > t && (!oursOnly || e.isOurs)).map((e) => e.id);
     },
 
     async storeEnvelope(e, isOurs = false) {
@@ -221,12 +221,12 @@ export function createMemoryStore(
       return true;
     },
 
-    async getEnvelopesByIds(ids) {
+    async getEnvelopesByIds(ids, oursOnly = false) {
       const t = now();
       const out: Envelope[] = [];
       for (const id of ids) {
         const row = envelopes.get(id);
-        if (!row || row.expiresAt <= t) continue;
+        if (!row || row.expiresAt <= t || (oursOnly && !row.isOurs)) continue;
         const decoded = decodeEnvelope(fromBase64(row.raw));
         if (decoded) out.push(decoded);
       }

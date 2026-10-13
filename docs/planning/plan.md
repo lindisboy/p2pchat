@@ -404,6 +404,7 @@ The interface is engineered for crisis conditions: tear gas, bright sunlight, st
   - 8-hour continuous locked-screen test on 4 physical Android devices (Samsung, Xiaomi, Pixel, Motorola) confirming packet relay survival.
 
 #### Phase 3: Store-and-Forward Mesh & Internet Gateway Sync
+- **Progress**: [Brand UI and nearby-relay consent increment](phase-3.md). Gateway transport and the physical-device verification gate remain outstanding.
 - **Private internet messaging design**: [End-to-end encryption over Tor onion transport](online-messaging.md). Contact messaging is distinct from public gateway forwarding; there is no automatic direct-internet fallback for private traffic.
 - **Objective**: Bridge offline mesh packets to online broadcast gateways.
 - **Deliverables**:

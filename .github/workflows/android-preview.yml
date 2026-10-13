@@ -126,6 +126,9 @@ jobs:
         working-directory: android
         run: ./gradlew :app:assembleRelease --build-cache --no-daemon
 
+      - name: Check APK builder metadata
+        run: python3 scripts/check-apk-privacy.py android/app/build/outputs/apk/release/app-release.apk
+
       - name: Stage artifact
         shell: bash
         run: |

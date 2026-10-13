@@ -101,6 +101,11 @@ export class MeshEngine {
    * Restored by `start()`.
    */
   private admitting = true;
+  private relayEnabled = false;
+
+  setRelayEnabled(enabled: boolean): void {
+    this.relayEnabled = enabled;
+  }
 
   /**
    * Channel keys we can currently open, including the public broadcast key.
@@ -571,11 +576,11 @@ export class MeshEngine {
     await this.broadcast(encodeEnvelope(envelope));
   }
 
-  private async broadcast(raw: Uint8Array, exceptPeerId?: string): Promise<void> {
+  private async broadcast(raw: Uint8Array, exceptPeerId?: string, relayed = false): Promise<void> {
     const b64 = toBase64(raw);
     await Promise.all(
       [...this.connected]
-        .filter((id) => id !== exceptPeerId)
+        .filter((id) => id !== exceptPeerId && (!relayed || this.relayEnabled))
         .map((id) =>
           this.transport.send(id, b64).catch((err) => {
             // A peer walking out of range mid-send is normal, not an error
@@ -742,8 +747,8 @@ export class MeshEngine {
           await this.applyReceipt(hit.opened.sender.publicId, parsed.messageId);
         }
 
-        // Still stored and relayed even though it was ours. Dropping it here
-        // would tell a traffic observer which device is the recipient.
+        // With relay consent, readable and opaque mail follow the same carry
+        // policy so forwarding does not reveal which device can decrypt it.
       } finally {
         hit.opened.body.fill(0);
         unpadded?.fill(0);
@@ -752,12 +757,13 @@ export class MeshEngine {
 
     // A full carry cache must not prevent delivery to this device, but must
     // prevent forwarding mail that we cannot retain for later reconciliation.
+    if (!this.relayEnabled) return;
     if (!(await this.store.storeEnvelope(envelope))) return;
     await this.refreshCarrying();
 
     if (envelope.hopCount + 1 >= envelope.maxHops) return;
     const forwarded: Envelope = { ...envelope, hopCount: envelope.hopCount + 1 };
-    await this.broadcast(encodeEnvelope(forwarded), fromPeerId);
+    await this.broadcast(encodeEnvelope(forwarded), fromPeerId, true);
   }
 
   /**
@@ -850,7 +856,9 @@ export class MeshEngine {
     // order is a fingerprint, and a soonest-to-expire prefix under the cap is a
     // stable subset. A fresh random sample each offer is neither. Reconciliation
     // is set membership (handleInventory), so order carries no meaning to drop.
-    const ids = shuffle(await this.store.envelopeIds()).slice(0, MAX_SYNC_PER_PEER);
+    let available = await this.store.envelopeIds(!this.relayEnabled);
+    if (!this.relayEnabled) available = await this.store.envelopeIds(true);
+    const ids = shuffle(available).slice(0, MAX_SYNC_PER_PEER);
     await this.sendControl(peerId, EnvelopeType.Inventory, ids);
   }
 
@@ -882,13 +890,14 @@ export class MeshEngine {
     const fresh = wanted.slice(0, MAX_SYNC_PER_PEER).filter((id) => !served.has(id));
     if (fresh.length === 0) return;
 
-    const envelopes = await this.store.getEnvelopesByIds(fresh);
+    const envelopes = await this.store.getEnvelopesByIds(fresh, !this.relayEnabled);
+    const ownIds = new Set(await this.store.envelopeIds(true));
     for (const e of envelopes) {
       if (served.size >= MAX_SERVED_PER_PEER) break;
       // Mark served regardless of hop eligibility, so an id we decline to
       // forward is not re-requestable either.
       served.add(toBase64(e.id));
-      if (e.hopCount >= e.maxHops) continue;
+      if (e.hopCount >= e.maxHops || (!this.relayEnabled && !ownIds.has(toBase64(e.id)))) continue;
       await this.transport
         .send(peerId, toBase64(encodeEnvelope({ ...e, hopCount: e.hopCount + 1 })))
         .catch(() => {});

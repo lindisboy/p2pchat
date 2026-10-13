@@ -60,7 +60,7 @@ export function ModeNotice({ info, onPress }: { info: ConversationInfo; onPress?
   const loud = info.mode === 'public';
 
   const bg = loud ? c.fill : info.tone === 'ok' ? t.bg : c.tint;
-  const fg = loud ? c.onFill : c.fg;
+  const fg = loud ? c.onFill : info.tone === 'caution' ? t.text : c.fg;
   const bodyColor = loud ? c.onFill : info.tone === 'ok' ? t.textMuted : t.text;
 
   const body = (
@@ -110,7 +110,7 @@ export function ModeNotice({ info, onPress }: { info: ConversationInfo; onPress?
       accessibilityRole="button"
       accessibilityHint={copy('mode.openSafetyHint')}
       onPress={onPress}
-      style={({ pressed }) => [frame, { opacity: pressed ? 0.8 : 1 }]}>
+      style={({ pressed }) => [frame, { backgroundColor: pressed ? t.bg : bg }]}>
       {body}
     </Pressable>
   );

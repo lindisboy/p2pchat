@@ -1,6 +1,15 @@
-import type { Catalog } from './en';
+import type {
+ Catalog } from './en';
 
 export const ta: Catalog = {
+  'radio.offlineAction': "Bluetooth இல்லாமல் தொடருங்கள்",
+  'settings.relayTitle': "அருகிலுள்ள ரிலே",
+  'settings.relayDetail': "அருகிலுள்ள மற்றவர்களின் மறைகுறியாக்கப்பட்ட செய்திகளை எடுத்துச் செல்லுங்கள். இது சேமிப்பையும் பேட்டரியையும் பயன்படுத்தும்; Bluetooth செயல்பாட்டைக் கண்டறிய முடியும். ரிலே அணைந்திருந்தாலும் உங்கள் அரட்டைகள் இயங்கும்.",
+  'settings.relayConsent': "அருகிலுள்ள ரிலேவை இயக்கவா?",
+  'settings.relayError': "ரிலே விருப்பத்தைச் சேமிக்க முடியவில்லை.",
+  'settings.internetTitle': "இணையத்துக்கு அனுப்புதல்",
+  'settings.internetDetail': "இந்தப் பதிப்பில் கிடைக்காது. இணையம் வழியாகச் செய்தி அனுப்பும் வசதி இன்னும் உருவாக்கப்படவில்லை.",
+
   'common.addPerson': 'ஒருவரைச் சேர்க்கவும்', 'common.cancel': 'ரத்துசெய்', 'common.chat': 'அரட்டை',
   'common.couldNotJoin': 'சேர முடியவில்லை.', 'common.couldNotSend': 'அனுப்ப முடியவில்லை.',
   'common.deleteEverything': 'அனைத்தையும் அழி', 'common.failed': 'தோல்வி', 'common.group': 'குழு',

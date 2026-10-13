@@ -1,7 +1,7 @@
 {
   "name": "p2pchat",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "dependencies": {
     "@expo/ui": "~57.0.7",
     "@noble/ciphers": "^2.2.0",

@@ -175,6 +175,7 @@ async function spawn(world: World, id: string): Promise<Node> {
   const store = createMemoryStore();
   const transport = world.transport(id);
   const engine = new MeshEngine(transport, store);
+  engine.setRelayEnabled(true);
   const read: Node['read'] = [];
   engine.onMessage = (conversationId, sender, text) => void read.push({ conversationId, sender, text });
   engine.getLocalPrekeys().ensureReady();
@@ -249,6 +250,7 @@ describe('radio lifecycle', () => {
     const transport = world.transport('A');
     const store = createMemoryStore();
     const engine = new MeshEngine(transport, store);
+  engine.setRelayEnabled(true);
     const identity = identityFromSeed(new Uint8Array(32).fill(251));
 
     transport.startError = new Error('location permission expired');
@@ -1229,5 +1231,74 @@ describe('forward secrecy (mesh e2e)', () => {
         inbox(C).map((m) => m.text),
         ['relayed-fs'],
       );
+    }));
+});
+
+
+describe('nearby relay consent', () => {
+  it('starts with relaying disabled', async () => {
+    const world = new World();
+    const store = createMemoryStore();
+    const engine = new MeshEngine(world.transport('B'), store);
+    const identity = identityFromSeed(new Uint8Array(32).fill(199));
+    const A = await spawn(world, 'A');
+    const C = await spawn(world, 'C');
+    try {
+      await engine.start(identity, 'B');
+      world.connect('A', 'B'); world.connect('B', 'C'); await world.settle();
+      await A.engine.sendText(C.pub, 'no implied consent'); await world.settle();
+      assert.equal(store.envelopes.length, 0);
+      assert.equal(inbox(C).length, 0);
+    } finally { await engine.stop(); await A.engine.stop(); await C.engine.stop(); }
+  });
+
+  it('declines an explicit request for foreign cached mail while disabled', () =>
+    scenario(['A', 'B', 'C'], async ({ A, B, C }, world) => {
+      world.connect('A', 'B'); await world.settle();
+      await A.engine.sendText(C.pub, 'cached foreign mail'); await world.settle();
+      const ids = await B.store.envelopeIds();
+      world.disconnect('A', 'B'); B.engine.setRelayEnabled(false);
+      world.connect('B', 'C'); await world.settle();
+      const request = encodeEnvelope({ version: PROTOCOL_VERSION, type: EnvelopeType.Request,
+        id: fromBase64(randomId()), createdAt: Date.now(), ttlSeconds: 300,
+        hopCount: 0, maxHops: 1, payload: toUtf8(JSON.stringify(ids)) });
+      world.transport('B').fire('payload', 'C', toBase64(request)); await world.settle();
+      assert.equal(inbox(C).length, 0);
+      assert.equal(relayed(B).length, 0);
+    }));
+
+  it('does not carry or forward other people’s mail when disabled, but receives direct mail', () =>
+    scenario(['A', 'B', 'C'], async ({ A, B, C }, world) => {
+      B.engine.setRelayEnabled(false);
+      world.connect('A', 'B'); world.connect('B', 'C');
+      await world.settle();
+      await A.engine.sendText(C.pub, 'needs a relay'); await world.settle();
+      assert.equal(inbox(C).length, 0);
+      assert.equal(B.store.envelopes.length, 0);
+      assert.equal(relayed(B).length, 0);
+      await A.engine.sendText(B.pub, 'direct still works'); await world.settle();
+      assert.equal(inbox(B)[0]?.text, 'direct still works');
+      await B.engine.sendText(A.pub, 'outgoing still works'); await world.settle();
+      assert.equal(inbox(A)[0]?.text, 'outgoing still works');
+    }));
+
+  it('does not offer previously carried mail after consent is withdrawn', () =>
+    scenario(['A', 'B', 'C'], async ({ A, B, C }, world) => {
+      world.connect('A', 'B'); await world.settle();
+      await A.engine.sendText(C.pub, 'cached while consented'); await world.settle();
+      assert.equal(B.store.envelopes.length, 1);
+      world.disconnect('A', 'B'); B.engine.setRelayEnabled(false);
+      world.connect('B', 'C'); await world.settle();
+      assert.equal(inbox(C).length, 0);
+      assert.equal(relayed(B).length, 0);
+    }));
+
+  it('carries new mail after consent is enabled', () =>
+    scenario(['A', 'B', 'C'], async ({ A, B, C }, world) => {
+      B.engine.setRelayEnabled(false);
+      world.connect('A', 'B'); world.connect('B', 'C'); await world.settle();
+      B.engine.setRelayEnabled(true);
+      await A.engine.sendText(C.pub, 'relay enabled'); await world.settle();
+      assert.equal(inbox(C)[0]?.text, 'relay enabled');
     }));
 });

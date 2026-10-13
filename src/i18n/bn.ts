@@ -1,6 +1,15 @@
-import type { Catalog } from './en';
+import type {
+ Catalog } from './en';
 
 export const bn: Catalog = {
+  'radio.offlineAction': "Bluetooth ছাড়াই চালিয়ে যান",
+  'settings.relayTitle': "কাছাকাছি রিলে",
+  'settings.relayDetail': "কাছাকাছি অন্যদের এনক্রিপ্ট করা বার্তা বহন করুন। এতে স্টোরেজ ও ব্যাটারি লাগে; Bluetooth কার্যকলাপ শনাক্ত করা যায়। রিলে বন্ধ থাকলেও নিজের চ্যাট চলে।",
+  'settings.relayConsent': "কাছাকাছি রিলে চালু করবেন?",
+  'settings.relayError': "রিলের পছন্দ সংরক্ষণ করা যায়নি।",
+  'settings.internetTitle': "ইন্টারনেটে পাঠানো",
+  'settings.internetDetail': "এই সংস্করণে নেই। ইন্টারনেটে বার্তা পাঠানোর সুবিধা এখনও তৈরি হয়নি।",
+
   'common.addPerson': 'একজনকে যোগ করুন', 'common.cancel': 'বাতিল', 'common.chat': 'চ্যাট',
   'common.couldNotJoin': 'যোগ দেওয়া যায়নি।', 'common.couldNotSend': 'পাঠানো যায়নি।',
   'common.deleteEverything': 'সবকিছু মুছুন', 'common.failed': 'ব্যর্থ', 'common.group': 'গ্রুপ',

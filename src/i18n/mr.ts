@@ -1,6 +1,15 @@
-import type { Catalog } from './en';
+import type {
+ Catalog } from './en';
 
 export const mr: Catalog = {
+  'radio.offlineAction': "Bluetooth शिवाय पुढे जा",
+  'settings.relayTitle': "जवळपास रिले",
+  'settings.relayDetail': "जवळच्या इतर लोकांचे एन्क्रिप्ट केलेले संदेश पुढे पोहोचवा. यासाठी स्टोरेज आणि बॅटरी लागते; Bluetooth वापर ओळखता येतो. रिले बंद असतानाही तुमच्या चॅट चालतात.",
+  'settings.relayConsent': "जवळपास रिले सुरू करायचे?",
+  'settings.relayError': "रिलेची निवड सेव्ह करता आली नाही.",
+  'settings.internetTitle': "इंटरनेटवर पुढे पाठवणे",
+  'settings.internetDetail': "या आवृत्तीत उपलब्ध नाही. इंटरनेटवर संदेश पाठवण्याची सुविधा अद्याप तयार झालेली नाही.",
+
   'common.addPerson': 'व्यक्ती जोडा', 'common.cancel': 'रद्द करा', 'common.chat': 'चॅट',
   'common.couldNotJoin': 'सामील होता आले नाही.', 'common.couldNotSend': 'पाठवता आले नाही.',
   'common.deleteEverything': 'सर्व काही हटवा', 'common.failed': 'अयशस्वी', 'common.group': 'गट',
