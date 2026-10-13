@@ -32,7 +32,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useI18n } from '@/i18n/provider';
 import { useApp } from '@/lib/app-state';
 import { MAX_CONTACT_NAME_LENGTH, cleanContactName } from '@/lib/contact';
-import { CONTACT_CODE_PREFIX, decodeContactCode } from '@/lib/contact-code';
+import { decodeContactCode, isContactCode } from '@/lib/contact-code';
 
 export default function AddScreen() {
   const t = useTheme();
@@ -208,7 +208,7 @@ export default function AddScreen() {
                   onBarcodeScanned={({ data }) => {
                     // The camera fires continuously; without this latch a single
                     // code adds the same contact dozens of times.
-                    if (handled.current || !data.startsWith(CONTACT_CODE_PREFIX)) return;
+                    if (handled.current || !isContactCode(data)) return;
                     handled.current = true;
                     accept(data);
                   }}
@@ -246,7 +246,7 @@ export default function AddScreen() {
               setTyped(v);
               setError(null);
             }}
-            placeholder="protestchat:…"
+            placeholder="p2pchat:…"
             accessibilityLabel={copy('add.pasteCodeA11y')}
             multiline
             style={{ minHeight: 84 }}

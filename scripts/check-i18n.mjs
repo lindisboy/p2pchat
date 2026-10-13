@@ -55,7 +55,7 @@ const userFacingProps = new Set([
   'detail',
   'action',
 ]);
-const allowedLiterals = new Set(['PROTESTCHAT', 'B', 'protestchat:…', 'gate4', 'anon']);
+const allowedLiterals = new Set(['P2PCHAT', 'B', 'p2pchat:…', 'gate4', 'anon']);
 const sourceFiles = [];
 
 function collect(directory) {

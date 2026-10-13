@@ -1,7 +1,7 @@
 /**
  * Trust module — identity, authorization, and emergency-broadcast authentication.
  *
- * This module is completely independent of the protestchat mesh protocol.
+ * This module is completely independent of the p2pchat mesh protocol.
  * It manages:
  *   - Entities (Ed25519 public keys with trust levels)
  *   - Delegations (signed authority grants from subscribed entities)

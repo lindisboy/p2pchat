@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. protestchat is security software for people under stress — careful changes matter more than fast ones.
+Thanks for helping. p2pchat is security software for people under stress — careful changes matter more than fast ones.
 
 ## Before you start
 

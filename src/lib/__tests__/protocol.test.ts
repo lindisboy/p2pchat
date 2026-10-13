@@ -16,6 +16,7 @@ import {
   EnvelopeType,
   HEADER_LEN,
   MAX_HOPS,
+  MAX_ENVELOPE_LEN,
   PROTOCOL_VERSION,
   TIME_GRANULARITY_MS,
   decodeBody,
@@ -166,6 +167,23 @@ describe('expiry', () => {
     assert.equal(isExpired(e, 1_000_000 + 59_000), false);
     assert.equal(isExpired(e, 1_000_000 + 61_000), true);
   });
+});
+
+it('rejects a structurally valid envelope beyond the radio size limit', () => {
+  const raw = new Uint8Array(MAX_ENVELOPE_LEN + 1);
+  raw.set(encodeEnvelope(sample({ payload: new Uint8Array(0) })));
+  new DataView(raw.buffer).setUint16(32, raw.length - HEADER_LEN);
+  assert.equal(decodeEnvelope(raw), null);
+});
+
+it('uses fresh padding bytes without changing bucket size or the decoded body', () => {
+  const body = toUtf8('hello');
+  const a = pad(body);
+  const b = pad(body);
+  assert.equal(a.length, b.length);
+  assert.deepEqual(unpad(a), body);
+  assert.deepEqual(unpad(b), body);
+  assert.notDeepEqual(a.slice(body.length + 4), b.slice(body.length + 4));
 });
 
 describe('message bodies', () => {

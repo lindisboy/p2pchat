@@ -4,12 +4,10 @@
  * Constraints that are not aesthetic preferences:
  *
  *   - Contrast is a safety feature. This gets used outdoors, in daylight, at
- *     speed, possibly by someone who is frightened. Every text/background pair
- *     below has been measured, not eyeballed, and clears WCAG AA at its
- *     intended size — most clear AAA. If you change a value here, re-measure.
- *     The tightest pairs, and therefore the ones to re-check first, are
- *     textFaint on surfaceRaised (4.53:1) and danger.onFill on danger.fill
- *     (4.54:1). Nothing in here has slack; there is no "just a shade lighter".
+ *     speed, possibly by someone who is frightened. Core text and action pairs
+ *     have been measured, not eyeballed. The tightest checked pair is white on
+ *     the urgent red fill (4.71:1). Re-measure any pair introduced by a token
+ *     change; do not infer contrast from a color's name or appearance.
  *   - Dark is the default. It costs less battery on OLED and is far less
  *     visible to the person standing behind you.
  *   - Status colour is never the only signal. Every state also carries a word,
@@ -40,48 +38,48 @@ export type ToneColors = {
 };
 
 const dark = {
-  // Not pure black: pure black against an OLED's off pixels makes text edges
-  // bloom, and the near-black still reads as black in a dark square.
-  bg: '#0B0B0D',
-  surface: '#141417',
-  surfaceRaised: '#1D1D22',
-  surfaceSunken: '#08080A',
-  border: '#2A2A31',
-  borderStrong: '#4A4A56',
+  // India kit's ink ground keeps OLED screens dark. Its warmer raised surface
+  // adds depth without putting large, saturated color fields behind content.
+  bg: '#000000',
+  surface: '#0B0B0B',
+  surfaceRaised: '#1A1714',
+  surfaceSunken: '#000000',
+  border: '#3A3530',
+  borderStrong: '#B9B0A2',
 
-  text: '#F6F6F8',
-  textMuted: '#A6A6B0',
-  textFaint: '#84848E',
+  text: '#F6EFE2',
+  textMuted: '#B9B0A2',
+  textFaint: '#9B9386',
 
-  bubbleIn: '#1D1D22',
-  bubbleOut: '#2E5FC3',
-  onBubbleOut: '#FFFFFF',
+  bubbleIn: '#1A1714',
+  bubbleOut: '#0D47A1',
+  onBubbleOut: '#F6EFE2',
 
-  accent: '#7FB0FF',
-  accentFill: '#2F6FE4',
-  onAccentFill: '#FFFFFF',
+  accent: '#7FA6E8',
+  accentFill: '#0D47A1',
+  onAccentFill: '#F6EFE2',
 
   // Kept as flat aliases because "green means connected" is referenced by name
   // in a dozen places and renaming it buys nothing.
   green: '#4ADE8B',
-  amber: '#FFC061',
-  red: '#FF7B7B',
-  blue: '#7FB0FF',
+  amber: '#FFB21A',
+  red: '#FF5A5F',
+  blue: '#7FA6E8',
 
   tone: {
     danger: {
-      fg: '#FF7B7B',
-      fill: '#D93A3F',
+      fg: '#FF5A5F',
+      fill: '#E21F26',
       onFill: '#FFFFFF',
-      tint: '#2B1214',
-      edge: '#A84348',
+      tint: '#241011',
+      edge: '#8B3A3D',
     },
     caution: {
-      fg: '#FFC061',
-      fill: '#FFB020',
-      onFill: '#1B1200',
-      tint: '#2A2010',
-      edge: '#9C7524',
+      fg: '#FFB21A',
+      fill: '#FFB21A',
+      onFill: '#0B0B0B',
+      tint: '#241D10',
+      edge: '#82601E',
     },
     ok: {
       fg: '#4ADE8B',
@@ -94,44 +92,44 @@ const dark = {
 };
 
 const light = {
-  bg: '#FFFFFF',
-  surface: '#F5F5F7',
-  surfaceRaised: '#EBEBEF',
-  surfaceSunken: '#EFEFF2',
-  border: '#D9D9E0',
-  borderStrong: '#A8A8B4',
+  bg: '#F6EFE2',
+  surface: '#FFFFFF',
+  surfaceRaised: '#FFF9F0',
+  surfaceSunken: '#EEE5D6',
+  border: '#D9CFBE',
+  borderStrong: '#0B0B0B',
 
-  text: '#0B0B0D',
-  textMuted: '#55555F',
-  textFaint: '#63636C',
+  text: '#0B0B0B',
+  textMuted: '#5C554D',
+  textFaint: '#625B51',
 
-  bubbleIn: '#EBEBEF',
-  bubbleOut: '#1B57BE',
-  onBubbleOut: '#FFFFFF',
+  bubbleIn: '#EEE5D6',
+  bubbleOut: '#0D47A1',
+  onBubbleOut: '#F6EFE2',
 
-  accent: '#1656C7',
-  accentFill: '#1656C7',
-  onAccentFill: '#FFFFFF',
+  accent: '#0D47A1',
+  accentFill: '#0D47A1',
+  onAccentFill: '#F6EFE2',
 
   green: '#0B7A43',
-  amber: '#8A5200',
-  red: '#C0272D',
-  blue: '#1656C7',
+  amber: '#765000',
+  red: '#C4141B',
+  blue: '#0D47A1',
 
   tone: {
     danger: {
-      fg: '#C0272D',
-      fill: '#B21F25',
+      fg: '#C4141B',
+      fill: '#E21F26',
       onFill: '#FFFFFF',
-      tint: '#FDECEC',
-      edge: '#BF7A7C',
+      tint: '#FBE9E6',
+      edge: '#BE7776',
     },
     caution: {
-      fg: '#8A5200',
-      fill: '#7A4800',
-      onFill: '#FFFFFF',
-      tint: '#FFF3E0',
-      edge: '#BC8E45',
+      fg: '#765000',
+      fill: '#FFB21A',
+      onFill: '#0B0B0B',
+      tint: '#FFF3D8',
+      edge: '#A67A2D',
     },
     ok: {
       fg: '#0B7A43',

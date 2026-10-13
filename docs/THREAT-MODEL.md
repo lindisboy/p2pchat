@@ -4,6 +4,12 @@ Written before the crypto, as promised. If you are reviewing this project, start
 
 Status: **draft, unaudited.** No independent security review has happened. Do not present this app to anyone as safe until that changes.
 
+## Phase 2 and proposed internet transport
+
+The [phase 2 implementation record](planning/phase-2.md) documents receive quotas, bounded concurrent ingress, and the envelope-cache budget, including their limits. Per-session quotas do not establish Sybil resistance or bound total database size.
+
+The [internet messaging proposal](planning/online-messaging.md) separates application end-to-end encryption from Tor onion transport and public gateway forwarding. Internet transport is not implemented. The offline-only statement below describes the current BLE message path; it is not a promise that all future modes avoid internet traffic. Tor can conceal recipient endpoints from a local ISP, but leaves traffic timing/volume observable and does not guarantee protection against an observer at both ends.
+
 ## Who this is for
 
 Someone at a protest or in a shutdown zone who needs to reach specific people they already know, when the cellular network is unavailable — either because an ISP-level suspension was ordered, or because a portable jammer is running nearby.

@@ -1,19 +1,6 @@
 /**
- * The single most important element in the app.
- *
- * In a jammed square the only question a user actually has is "is this thing
- * working right now?" — so that answer gets the largest type on the screen, in
- * plain words. No signal bars, no jargon, no "peers: 3".
- *
- * Every state carries a colour AND a word AND a sentence of explanation,
- * because in direct sunlight the colour is the first thing to become useless.
- *
- * The pulse is the only sustained motion in the app and it means one specific
- * thing: the radio is still looking. It stops the moment there is an answer, so
- * "something is moving" and "nothing has happened yet" are the same signal —
- * which is what makes a settled screen readable at a glance. Under reduced
- * motion it renders the settled frame; the state is never carried by movement
- * alone, only reinforced by it.
+ * A compact, persistent radio state. The word and explanation remain visible
+ * when color or motion cannot be perceived.
  */
 
 import { useEffect } from 'react';
@@ -123,27 +110,23 @@ export function StatusBanner({ status }: { status: MeshStatus }) {
         styles.card,
         {
           backgroundColor: t.surface,
-          borderColor: affirm ? c.edge : t.border,
-          borderWidth: affirm ? 1 : StyleSheet.hairlineWidth,
+          borderColor: t.border,
         },
       ]}>
-      <View style={styles.head}>
+      <View style={styles.beaconColumn}>
         <Beacon color={c.fg} active={searching} affirm={affirm} />
-        <Text style={[Type.label, { color: c.fg }]}>{state.toUpperCase()}</Text>
       </View>
-
-      <Text style={[Type.display, { color: t.text, marginTop: Spacing.md }]}>{headline}</Text>
-
-      <Text style={[Type.body, { color: t.textMuted, marginTop: Spacing.sm }]}>{detail}</Text>
-
-      {(carrying || radioError) && (
-        <View style={[styles.meta, { borderColor: t.border }]}>
-          {!!carrying && <Text style={[Type.caption, { color: t.textMuted }]}>{carrying}</Text>}
-          {!!radioError && (
-            <Text style={[Type.caption, { color: t.tone.danger.fg }]}>{radioError}</Text>
-          )}
+      <View style={styles.copy}>
+        <View style={styles.titleLine}>
+          <Text style={[Type.label, { color: c.fg }]}>{state.toUpperCase()}</Text>
+          <Text style={[Type.calloutStrong, { color: t.text, flex: 1 }]} numberOfLines={1}>
+            {headline}
+          </Text>
         </View>
-      )}
+        <Text style={[Type.caption, { color: t.textMuted }]} numberOfLines={2}>{detail}</Text>
+        {!!carrying && <Text style={[Type.caption, { color: t.textMuted }]}>{carrying}</Text>}
+        {!!radioError && <Text style={[Type.caption, { color: t.tone.danger.fg }]}>{radioError}</Text>}
+      </View>
     </View>
   );
 }
@@ -217,11 +200,16 @@ const DOT = 12;
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.xl,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
+    borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Spacing.xl,
+    padding: Spacing.md,
   },
-  head: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, height: 20 },
+  beaconColumn: { width: 16, height: 20, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  copy: { flex: 1, gap: Spacing.xs },
+  titleLine: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   beacon: { width: DOT, height: DOT, alignItems: 'center', justifyContent: 'center' },
   dot: { width: DOT, height: DOT, borderRadius: DOT / 2 },
   halo: {
@@ -238,11 +226,5 @@ const styles = StyleSheet.create({
     height: DOT,
     borderRadius: DOT / 2,
     borderWidth: 1.5,
-  },
-  meta: {
-    marginTop: Spacing.lg,
-    paddingTop: Spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: Spacing.sm,
   },
 });

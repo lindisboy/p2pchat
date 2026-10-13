@@ -205,15 +205,20 @@ export function Card({ style, ...rest }: ViewProps) {
  * `{i > 0 && <Separator />}`, and so a list never ends up nested inside a card
  * inside another card.
  */
-export function List({ children }: { children: ReactNode }) {
+export function List({ children, flat = false }: { children: ReactNode; flat?: boolean }) {
   const t = useTheme();
   const items = Array.isArray(children) ? children.filter(Boolean) : [children];
 
   return (
-    <View style={[styles.list, { backgroundColor: t.surface, borderColor: t.border }]}>
+    <View
+      style={
+        flat
+          ? styles.listFlat
+          : [styles.list, { backgroundColor: t.surface, borderColor: t.border }]
+      }>
       {Children.toArray(items).map((child, i) => (
         <View key={`item-${i}`}>
-          {i > 0 && <View style={[styles.sep, { backgroundColor: t.border }]} />}
+          {i > 0 && <View style={[flat ? styles.flatSep : styles.sep, { backgroundColor: t.border }]} />}
           {child}
         </View>
       ))}
@@ -552,9 +557,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
+  listFlat: { backgroundColor: 'transparent' },
   // Inset to the row's text column, so a list reads as one block rather than
   // as a stack of unrelated strips.
   sep: { height: StyleSheet.hairlineWidth, marginLeft: Spacing.lg },
+  flatSep: { height: StyleSheet.hairlineWidth, marginLeft: 68 },
   row: {
     minHeight: TAP_TARGET + 8,
     flexDirection: 'row',

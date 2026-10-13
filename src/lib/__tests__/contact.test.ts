@@ -16,6 +16,8 @@ describe('contact codes', () => {
     assert.equal(publicIdFromContactCode(publicId), publicId);
     assert.equal(publicIdFromContactCode(`${CONTACT_CODE_PREFIX}${publicId}`), publicId);
     assert.equal(publicIdFromContactCode(`  ${CONTACT_CODE_PREFIX}${publicId}  `), publicId);
+    assert.equal(publicIdFromContactCode(`protestchat:${publicId}`), publicId);
+    assert.equal(CONTACT_CODE_PREFIX, 'p2pchat:');
   });
 
   it('rejects malformed codes and a prefix embedded inside other text', () => {

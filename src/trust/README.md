@@ -1,6 +1,6 @@
 # Trust module
 
-Emergency-broadcast authentication and trust management for protestchat.
+Emergency-broadcast authentication and trust management for p2pchat.
 
 This module is **completely independent** of the mesh protocol — it doesn't import anything from `src/lib/`, doesn't know about envelopes, BLE, or the mesh. It depends only on `@noble/curves` (Ed25519) and `@noble/hashes` (SHA-256).
 

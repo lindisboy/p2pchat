@@ -336,7 +336,7 @@ class BleMeshModule : Module() {
    * reenter and a recursive lock around this much state is how you get a deadlock
    * you can only reproduce in a crowd.
    */
-  private val thread = HandlerThread("org.protestchat.blemesh").apply { start() }
+  private val thread = HandlerThread("org.p2pchat.blemesh").apply { start() }
   private val handler = Handler(thread.looper)
 
   /**
@@ -690,7 +690,7 @@ class BleMeshModule : Module() {
     //
     // NOT the display name. NOT any part of the user's public key. NOT anything
     // derived from either. setIncludeDeviceName(false) is load-bearing: the
-    // Android device name is something like "Nisarga's Pixel", it is stable for
+    // Android device name is something like "a personally named phone", it is stable for
     // the life of the phone, and broadcasting it would be a permanent tracking
     // beacon carrying a real human name. Peer identity is established by the
     // sealed payloads at the mesh layer; this transport only ever deals in
@@ -1622,7 +1622,7 @@ class BleMeshModule : Module() {
   private fun describe(state: String): String = when (state) {
     "ready" -> ""
     "poweredOff" -> "Bluetooth is switched off. Turn it on in Quick Settings."
-    "unauthorized" -> "protestchat is not allowed to use Bluetooth. Grant the Nearby devices permission in Settings."
+    "unauthorized" -> "p2pchat is not allowed to use Bluetooth. Grant the Nearby devices permission in Settings."
     "locationOff" -> "Location Services must be on for Bluetooth scanning on this version of Android."
     "unsupported" -> "This device cannot advertise over Bluetooth LE, so it cannot join the mesh."
     "resetting" -> "The Bluetooth stack is restarting."

@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "protestchat",
-    "slug": "protestchat",
+    "name": "p2pchat",
+    "slug": "p2pchat",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "protestchat",
+    "scheme": "p2pchat",
     "userInterfaceStyle": "automatic",
     "locales": {
       "en": "./locales/en.json",
@@ -18,15 +18,15 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "protestchat uses Bluetooth Low Energy to find nearby phones and pass messages between them directly, so they travel without a cell tower or the internet. Nothing about you is broadcast: the Bluetooth identifier is random and changes every 15 minutes.",
-        "NSBluetoothPeripheralUsageDescription": "protestchat advertises over Bluetooth Low Energy so nearby phones can find this one and relay messages without the internet. The advertised identifier is random and changes every 15 minutes.",
-        "NSLocalNetworkUsageDescription": "protestchat uses the local network to exchange messages directly with nearby devices.",
+        "NSBluetoothAlwaysUsageDescription": "p2pchat uses Bluetooth to find nearby phones and pass messages without the internet. This can use more battery, and nearby radio scanners can detect Bluetooth activity. The app does not use GPS.",
+        "NSBluetoothPeripheralUsageDescription": "p2pchat advertises over Bluetooth Low Energy so nearby phones can find this one and relay messages without the internet. The advertised identifier is random and changes every 15 minutes.",
+        "NSLocalNetworkUsageDescription": "p2pchat uses the local network to exchange messages directly with nearby devices.",
         "NSBonjourServices": [
           "_nearby._tcp",
           "_nearby._udp"
         ]
       },
-      "bundleIdentifier": "com.anonymous.protestchat"
+      "bundleIdentifier": "com.anonymous.p2pchat"
     },
     "android": {
       "adaptiveIcon": {
@@ -36,7 +36,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.protestchat",
+      "package": "com.anonymous.p2pchat",
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.SYSTEM_ALERT_WINDOW",
@@ -59,7 +59,12 @@
           "imageWidth": 76
         }
       ],
-      "expo-sqlite",
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
       "expo-secure-store",
       [
         "expo-build-properties",
@@ -77,8 +82,22 @@
         "expo-localization",
         {
           "supportedLocales": {
-            "ios": ["en", "hi", "bn", "mr", "te", "ta"],
-            "android": ["en", "hi", "bn", "mr", "te", "ta"]
+            "ios": [
+              "en",
+              "hi",
+              "bn",
+              "mr",
+              "te",
+              "ta"
+            ],
+            "android": [
+              "en",
+              "hi",
+              "bn",
+              "mr",
+              "te",
+              "ta"
+            ]
           }
         }
       ]

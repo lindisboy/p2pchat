@@ -130,7 +130,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts
-          apk_name="protestchat-${GITHUB_SHA::12}-android-preview.apk"
+          apk_name="p2pchat-${GITHUB_SHA::12}-android-preview.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "artifacts/${apk_name}"
           (cd artifacts && sha256sum "${apk_name}" > SHA256SUMS)
           printf 'APK_NAME=%s\n' "${apk_name}" >> "${GITHUB_ENV}"
@@ -144,7 +144,7 @@ jobs:
         id: upload
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: protestchat-android-preview-${{ github.sha }}
+          name: p2pchat-android-preview-${{ github.sha }}
           path: artifacts/
           if-no-files-found: error
           retention-days: 7

@@ -292,7 +292,7 @@ private final class BleMeshRadio: NSObject {
   /// every AsyncFunction. A serial queue rather than a lock because CoreBluetooth
   /// callbacks reenter and a recursive lock around this much state is how you get
   /// a deadlock you can only reproduce in a crowd.
-  private let queue = DispatchQueue(label: "org.protestchat.blemesh", qos: .userInitiated)
+  private let queue = DispatchQueue(label: "org.p2pchat.blemesh", qos: .userInitiated)
 
   /// Called on `queue` for every event. The owner is responsible for getting it
   /// to the JS runtime on whatever thread that runtime demands.
@@ -916,7 +916,7 @@ private final class BleMeshRadio: NSObject {
     switch state {
     case "ready": return ""
     case "poweredOff": return "Bluetooth is switched off. Turn it on in Control Centre or Settings."
-    case "unauthorized": return "protestchat is not allowed to use Bluetooth. Enable it in Settings › Privacy › Bluetooth."
+    case "unauthorized": return "p2pchat is not allowed to use Bluetooth. Enable it in Settings › Privacy › Bluetooth."
     case "unsupported": return "This device has no usable Bluetooth LE radio."
     case "resetting": return "The Bluetooth stack is restarting."
     default: return "Bluetooth state is not known yet."

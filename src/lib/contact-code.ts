@@ -1,8 +1,8 @@
 /**
  * Contact introduction codes (QR / paste).
  *
- * v1: protestchat:<publicId>
- * v2: protestchat:v2:<publicId>:<prekeyBundle>
+ * v1: p2pchat:<publicId>
+ * v2: p2pchat:v2:<publicId>:<prekeyBundle>
  *
  * v2 carries a signed prekey (SPK). One-time prekeys are deliberately omitted:
  * a QR can be scanned by many people, and consume-on-open OTKs would silently
@@ -15,7 +15,12 @@ import { parsePublicId, verifyReceiveKey } from './crypto-core';
 import type { PrekeyBundle } from './prekeys';
 import { decodeBundle, encodeBundle } from './prekeys';
 
-export const CONTACT_CODE_PREFIX = 'protestchat:';
+export const CONTACT_CODE_PREFIX = 'p2pchat:';
+const LEGACY_CONTACT_CODE_PREFIX = 'protestchat:';
+
+export function isContactCode(raw: string): boolean {
+  return raw.startsWith(CONTACT_CODE_PREFIX) || raw.startsWith(LEGACY_CONTACT_CODE_PREFIX);
+}
 
 export type ContactCode = {
   identity: PublicIdentity;
@@ -37,12 +42,14 @@ export function encodeContactCode(publicId: string, bundle?: PrekeyBundle | null
  */
 export function decodeContactCode(raw: string): ContactCode | null {
   const trimmed = raw.trim();
-  if (!trimmed.startsWith(CONTACT_CODE_PREFIX)) {
+  const prefix = [CONTACT_CODE_PREFIX, LEGACY_CONTACT_CODE_PREFIX]
+    .find((value) => trimmed.startsWith(value));
+  if (!prefix) {
     const identity = parsePublicId(trimmed);
     return identity ? { identity, bundle: null } : null;
   }
 
-  const rest = trimmed.slice(CONTACT_CODE_PREFIX.length);
+  const rest = trimmed.slice(prefix.length);
 
   if (rest.startsWith('v2:')) {
     const body = rest.slice(3);

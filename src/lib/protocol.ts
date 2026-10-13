@@ -18,6 +18,7 @@
  */
 
 import { concat } from './bytes';
+import { randomBytes } from '@noble/hashes/utils.js';
 
 export const PROTOCOL_VERSION = 1;
 const MAGIC_0 = 0x50; // 'P'
@@ -59,6 +60,7 @@ export const EnvelopeType = {
   Request: 3,
 } as const;
 
+// eslint-disable-next-line @typescript-eslint/no-redeclare
 export type EnvelopeType = (typeof EnvelopeType)[keyof typeof EnvelopeType];
 
 export type Envelope = {
@@ -109,7 +111,7 @@ export function encodeEnvelope(e: Envelope): Uint8Array {
 }
 
 export function decodeEnvelope(raw: Uint8Array): Envelope | null {
-  if (raw.length < HEADER_LEN) return null;
+  if (raw.length < HEADER_LEN || raw.length > MAX_ENVELOPE_LEN) return null;
   if (raw[0] !== MAGIC_0 || raw[1] !== MAGIC_1) return null;
   if (raw[2] !== PROTOCOL_VERSION) return null;
 
@@ -161,11 +163,9 @@ export function pad(body: Uint8Array): Uint8Array {
   const needed = body.length + 4;
   const bucket = BUCKETS.find((b) => b >= needed) ?? needed;
 
-  const out = new Uint8Array(bucket);
+  const out = randomBytes(bucket);
   new DataView(out.buffer).setUint32(0, body.length);
   out.set(body, 4);
-  // Remainder stays zero. It is inside the AEAD, so it costs an adversary
-  // nothing to guess and gains them nothing to know.
   return out;
 }
 

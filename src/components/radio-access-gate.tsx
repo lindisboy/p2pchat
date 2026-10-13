@@ -23,6 +23,7 @@ type GateCopy = {
 function copyFor(
   status: BleStatus | null,
   appReady: boolean,
+  permissionRequested: boolean,
   copy: ReturnType<typeof useI18n>['t'],
 ): GateCopy {
   if (!appReady) {
@@ -30,6 +31,13 @@ function copyFor(
   }
   switch (status?.state) {
     case 'unauthorized':
+      if (!permissionRequested) {
+        return {
+          title: copy('radio.consentTitle'),
+          detail: copy('radio.consentDetail'),
+          action: copy('radio.allowNearby'),
+        };
+      }
       return {
         title: copy('radio.permissionTitle'),
         detail: copy('radio.permissionDetail'),
@@ -76,6 +84,7 @@ export function RadioAccessGate({
   const insets = useSafeAreaInsets();
   const [status, setStatus] = useState<BleStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [permissionRequested, setPermissionRequested] = useState(false);
   const [admitted, setAdmitted] = useState(false);
   const promptedState = useRef<BleState | null>(null);
   const mounted = useRef(true);
@@ -97,6 +106,7 @@ export function RadioAccessGate({
   const request = useCallback(async () => {
     if (busy) return;
     setBusy(true);
+    setPermissionRequested(true);
     try {
       const next = await requestRadioAccess();
       promptedState.current = next.state;
@@ -133,6 +143,8 @@ export function RadioAccessGate({
       status.state === 'ready' ||
       status.state === 'resetting' ||
       status.state === 'unsupported' ||
+      status.state === 'unauthorized' ||
+      status.state === 'poweredOff' ||
       promptedState.current === status.state
     ) {
       return;
@@ -143,8 +155,8 @@ export function RadioAccessGate({
 
   if (appReady && status?.state === 'ready' && admitted) return children;
 
-  const copy = copyFor(status, appReady, copyText);
-  const openSettings = status?.state === 'unauthorized' ||
+  const copy = copyFor(status, appReady, permissionRequested, copyText);
+  const openSettings = (status?.state === 'unauthorized' && permissionRequested) ||
     (Platform.OS === 'ios' && status?.state === 'poweredOff');
 
   return (

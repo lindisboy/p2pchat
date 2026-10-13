@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        If this could put users at risk in the field (crypto, identity spoofing, wipe, relay abuse), use [SECURITY.md](https://github.com/ni5arga/protestchat/blob/main/SECURITY.md) instead of a public issue.
+        If this could put users at risk in the field (crypto, identity spoofing, wipe, relay abuse), use [SECURITY.md](https://github.com/lindisboy/p2pchat/blob/main/SECURITY.md) instead of a public issue.
   - type: textarea
     id: what
     attributes:

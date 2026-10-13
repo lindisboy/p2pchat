@@ -29,6 +29,7 @@ import { LocalPrekeys, PeerPrekeyBook } from './prekeys';
 import type { Envelope, MessageBody, PrekeyUpdateWire } from './protocol';
 import {
   DEFAULTS,
+  MAX_ENVELOPE_LEN,
   EnvelopeType,
   PROTOCOL_VERSION,
   decodeBody,
@@ -66,6 +67,8 @@ function shuffle<T>(xs: T[]): T[] {
  * carry-cache worth of traffic, then goes quiet until it reconnects.
  */
 const MAX_SERVED_PER_PEER = 600;
+export const MAX_RECEIVED_PER_PEER = 600;
+const MAX_PENDING_PER_PEER = 8;
 
 export type MeshStatus = {
   running: boolean;
@@ -120,12 +123,13 @@ export class MeshEngine {
    * missed a delivery will re-sync on reconnect.
    */
   private servedToPeer = new Map<string, Set<string>>();
+  private ingressSessions = new Map<string, { received: number; pending: number }>();
 
   /**
    * Optional hook after local OTK/SPK state changes so the app can persist.
    * Tests leave this null.
    */
-  onPrekeysChanged: (() => void) | null = null;
+  onPrekeysChanged: (() => void | Promise<void>) | null = null;
 
   /**
    * Fired when a message we can read is opened.
@@ -137,10 +141,12 @@ export class MeshEngine {
 
   /** Replaces the set of channel keys used for trial decryption. */
   setChannelKeys(keys: { id: string; key: Uint8Array }[]): void {
-    this.channelKeys = keys;
+    for (const channel of this.channelKeys) channel.key.fill(0);
+    this.channelKeys = keys.map(({ id, key }) => ({ id, key: Uint8Array.from(key) }));
   }
 
   setLocalPrekeys(local: LocalPrekeys): void {
+    if (this.localPrekeys !== local) this.localPrekeys.clear();
     this.localPrekeys = local;
   }
 
@@ -211,9 +217,14 @@ export class MeshEngine {
       this.transport.on('peerLost', (id) => {
         this.peers.delete(id);
         this.connected.delete(id);
+        this.servedToPeer.delete(id);
+        this.ingressSessions.delete(id);
         this.emit();
       }),
       this.transport.on('connected', (p) => {
+        if (!this.ingressSessions.has(p.id)) {
+          this.ingressSessions.set(p.id, { received: 0, pending: 0 });
+        }
         this.peers.set(p.id, p);
         this.connected.add(p.id);
         this.emit();
@@ -222,9 +233,16 @@ export class MeshEngine {
       this.transport.on('disconnected', (id) => {
         this.connected.delete(id);
         this.servedToPeer.delete(id);
+        this.ingressSessions.delete(id);
         this.emit();
       }),
-      this.transport.on('payload', (peerId, b64) => void this.ingest(peerId, b64)),
+      this.transport.on('payload', (peerId, b64) => {
+        void this.receive(peerId, b64).catch(() => {
+          if (!this.admitting) return;
+          this.lastError = 'Could not process a nearby packet. Turn nearby messaging off and on to retry.';
+          this.emit();
+        });
+      }),
       this.transport.on('error', (message) => {
         // An empty message is the transport's "clear the error" signal, e.g. the
         // radio reaching 'ready' after a transient startup state.
@@ -246,6 +264,8 @@ export class MeshEngine {
       this.lastError = error instanceof Error ? error.message : 'Could not start the mesh radio.';
       this.peers.clear();
       this.connected.clear();
+      this.ingressSessions.clear();
+      this.servedToPeer.clear();
       await this.transport.stop().catch(() => {});
       for (const u of this.unsubscribes) u();
       this.unsubscribes = [];
@@ -272,9 +292,16 @@ export class MeshEngine {
    */
   dropSecrets(): void {
     this.admitting = false;
-    this.identity = null;
+    if (this.identity) {
+      this.identity.edSecret.fill(0);
+      this.identity.xSecret.fill(0);
+      this.identity = null;
+    }
+    for (const channel of this.channelKeys) channel.key.fill(0);
     this.channelKeys = [];
+    this.localPrekeys.clear();
     this.localPrekeys = new LocalPrekeys();
+    this.peerPrekeys.clear();
     this.peerPrekeys = new PeerPrekeyBook();
     this.emit();
   }
@@ -288,6 +315,8 @@ export class MeshEngine {
     this.unsubscribes = [];
     this.peers.clear();
     this.connected.clear();
+    this.ingressSessions.clear();
+    this.servedToPeer.clear();
     // Secrets first (sync), then the radio — which may hang. panicWipe also
     // calls dropSecrets() earlier so a hang here is not a secret-retention bug.
     this.dropSecrets();
@@ -347,7 +376,7 @@ export class MeshEngine {
       this.packBody(text, messageId, this.prekeysFor(recipient.publicId)),
       agreement,
     );
-    this.onPrekeysChanged?.();
+    await this.onPrekeysChanged?.();
 
     await this.recordOutgoing(messageId, recipient.publicId, text, [recipient.publicId]);
     // 'sent' is written BEFORE injecting, and that ordering is load-bearing: the
@@ -356,7 +385,7 @@ export class MeshEngine {
     // with a weaker state. The condition is unchanged — "was there anybody to
     // hand this to" is known before we hand it over.
     if (this.connected.size > 0) await this.store.setMessageState(messageId, 'sent');
-    await this.inject(sealed);
+    await this.injectOutgoing(messageId, sealed);
 
     return messageId;
   }
@@ -380,7 +409,7 @@ export class MeshEngine {
 
     await this.recordOutgoing(messageId, `#${channelId}`, text, []);
     if (this.connected.size > 0) await this.store.setMessageState(messageId, 'sent');
-    await this.inject(sealed);
+    await this.injectOutgoing(messageId, sealed);
 
     return messageId;
   }
@@ -418,15 +447,24 @@ export class MeshEngine {
         const memberBody = this.packBody(text, messageId, this.prekeysFor(member.publicId));
         const { public: agreement } = this.peerPrekeys.takeAgreementPublic(member);
         const sealed = seal(this.identity!, member, memberBody, agreement);
-        await this.inject(sealed, jitterMs());
+        await this.injectOutgoing(messageId, sealed, jitterMs());
       }),
     );
-    this.onPrekeysChanged?.();
+    await this.onPrekeysChanged?.();
 
     return messageId;
   }
 
   // ---- shared plumbing ----------------------------------------------------
+
+  private async injectOutgoing(messageId: string, sealed: Uint8Array, delayMs = 0): Promise<void> {
+    try {
+      await this.inject(sealed, delayMs);
+    } catch (error) {
+      await this.store.setMessageState(messageId, 'failed');
+      throw error;
+    }
+  }
 
   private prekeysFor(peerPublicId: string): PrekeyUpdateWire | undefined {
     if (!this.identity) return undefined;
@@ -520,7 +558,9 @@ export class MeshEngine {
 
     // Stored before any delay, so a message survives the app being killed
     // between injection and transmission.
-    await this.store.storeEnvelope(envelope, true);
+    if (!(await this.store.storeEnvelope(envelope, true))) {
+      throw new Error('Message cache is full. Try again after stored packets expire.');
+    }
     await this.store.markSeen(toBase64(envelope.id));
     // Record the opaque ciphertext so a re-wrap of this payload cannot re-enter
     // our carry cache with a reset hop/TTL if it comes back via a peer (#54).
@@ -549,6 +589,21 @@ export class MeshEngine {
   // -------------------------------------------------------------------------
   // Receiving
   // -------------------------------------------------------------------------
+
+  private async receive(peerId: string, payloadBase64: string): Promise<void> {
+    const session = this.ingressSessions.get(peerId);
+    if (!this.admitting || !session || session.received >= MAX_RECEIVED_PER_PEER) return;
+    // Count malformed/control/duplicate packets too, before decoding or DB work.
+    session.received++;
+    if (payloadBase64.length > 4 * Math.ceil(MAX_ENVELOPE_LEN / 3)) return;
+    if (session.pending >= MAX_PENDING_PER_PEER) return;
+    session.pending++;
+    try {
+      await this.ingest(peerId, payloadBase64);
+    } finally {
+      session.pending--;
+    }
+  }
 
   private async ingest(fromPeerId: string, payloadBase64: string): Promise<void> {
     // panicWipe sets admitting=false via dropSecrets() before the DB wipe and
@@ -597,99 +652,107 @@ export class MeshEngine {
     // learn which mode a message is in.
     const hit = this.tryOpen(envelope.payload);
     if (hit) {
-      // Per-message FS: if this opened under an OTK, wipe that secret now.
-      if (hit.opened.agreementPublic) {
-        if (this.localPrekeys.consumeOtk(hit.opened.agreementPublic)) {
-          this.onPrekeysChanged?.();
+      let unpadded: Uint8Array | null = null;
+      try {
+        // Per-message FS: if this opened under an OTK, wipe that secret now.
+        if (hit.opened.agreementPublic) {
+          if (this.localPrekeys.consumeOtk(hit.opened.agreementPublic)) {
+            await this.onPrekeysChanged?.();
+          }
         }
-      }
 
-      const unpadded = unpad(hit.opened.body);
-      const parsed = unpadded ? decodeBody(fromUtf8(unpadded)) : null;
+        unpadded = unpad(hit.opened.body);
+        const parsed = unpadded ? decodeBody(fromUtf8(unpadded)) : null;
 
-      if (parsed?.kind === 'text') {
-        const sender = hit.opened.sender.publicId;
+        if (parsed?.kind === 'text') {
+          const sender = hit.opened.sender.publicId;
 
-        // Content-level dedup. The envelope-id dedup above is defeated by a
-        // replay attacker who re-wraps a captured ciphertext in a fresh envelope
-        // id; hashing the DECRYPTED body catches that. A genuine resend carries
-        // a fresh random `id` (and a distinct sentAt), so only an exact replay
-        // collides. If we have already delivered this message, we still relay
-        // the envelope below (others may not have it) but do not file a
-        // duplicate or re-ack — a stale directive resurfacing hours later is
-        // exactly the confusion this prevents.
-        const contentHash = toBase64(
-          sha256(concat(toUtf8(`${sender}|${hit.conversationId ?? ''}|`), hit.opened.body)),
-        );
+          // Content-level dedup. The envelope-id dedup above is defeated by a
+          // replay attacker who re-wraps a captured ciphertext in a fresh envelope
+          // id; hashing the DECRYPTED body catches that. A genuine resend carries
+          // a fresh random `id` (and a distinct sentAt), so only an exact replay
+          // collides. If we have already delivered this message, we still relay
+          // the envelope below (others may not have it) but do not file a
+          // duplicate or re-ack — a stale directive resurfacing hours later is
+          // exactly the confusion this prevents.
+          const contentHash = toBase64(
+            sha256(concat(toUtf8(`${sender}|${hit.conversationId ?? ''}|`), hit.opened.body)),
+          );
 
-        if (await this.store.markMessageSeen(contentHash)) {
-          // Never overwrite a name the user set; only ensure the sender exists so
-          // channel messages from strangers are attributable to something stable.
-          await this.store.upsertContact(sender, shortName(sender));
-          await this.store.insertMessage({
-            id: randomId(),
-            peerId: hit.conversationId ?? sender,
-            senderId: sender,
-            outgoing: false,
-            text: parsed.text,
-            sentAt: parsed.sentAt,
-            state: 'delivered',
-          });
-          this.onMessage?.(hit.conversationId ?? sender, sender, parsed.text, parsed.sentAt);
+          if (await this.store.markMessageSeen(contentHash)) {
+            // Never overwrite a name the user set; only ensure the sender exists so
+            // channel messages from strangers are attributable to something stable.
+            await this.store.upsertContact(sender, shortName(sender));
+            await this.store.insertMessage({
+              id: randomId(),
+              peerId: hit.conversationId ?? sender,
+              senderId: sender,
+              outgoing: false,
+              text: parsed.text,
+              sentAt: parsed.sentAt,
+              state: 'delivered',
+            });
+            this.onMessage?.(hit.conversationId ?? sender, sender, parsed.text, parsed.sentAt);
 
-          // Absorb sender prekeys only on direct/group (identity open), never on
-          // channel hits — channel authors are not a 1:1 seal relationship.
-          if (hit.conversationId === null && parsed.prekeys) {
+            // Absorb sender prekeys only on direct/group (identity open), never on
+            // channel hits — channel authors are not a 1:1 seal relationship.
+            if (hit.conversationId === null && parsed.prekeys) {
+              this.peerPrekeys.absorbWire(hit.opened.sender, parsed.prekeys);
+            }
+
+            // Ack only what asked to be acked, only in the one-to-one mode, and
+            // only to someone the user actually added.
+            //
+            // `conversationId === null` means this opened under our own identity —
+            // a direct message, or one copy of a group fan-out, which is the same
+            // thing on the wire. A channel hit is never acked even if the sender
+            // put an id in the body, so a hostile or buggy peer cannot talk us
+            // into announcing our presence in a channel.
+            //
+            // The `isAddedContact` gate is the important one: a receipt is a
+            // signed, timestamped liveness proof sealed straight back to the
+            // sender. Emitting one to anyone who direct-messages us turns the app
+            // into a presence oracle — an attacker who has our public id (off a
+            // poster, a leaked code) pings us and gets cryptographic confirmation
+            // this exact device is here and relaying. Gating on a relationship we
+            // chose, not on the wire format, is what channels already do; direct
+            // messages must be held to the same rule. Auto-filed senders (added=0)
+            // do not qualify, so a repeat ping cannot bootstrap itself into an ack.
+            if (
+              hit.conversationId === null &&
+              parsed.id &&
+              (await this.store.isAddedContact(sender))
+            ) {
+              await this.sendReceipt(hit.opened.sender, parsed.id);
+            }
+          }
+        } else if (parsed?.kind === 'receipt' && hit.conversationId === null) {
+          // A receipt is not itself acked. `packBody` is the only thing that ever
+          // sets a message id, and it is only ever called for text, so a receipt
+          // carries nothing to reply to and this branch never sends — which is
+          // what stops two phones acking each other's acks forever.
+          //
+          // Direct hits only. We never seal an ack to a channel key, so a receipt
+          // arriving through a channel is a member trying to acknowledge on a
+          // path we did not offer; the ledger would refuse it anyway, and there
+          // is no reason to run it.
+          if (parsed.prekeys) {
             this.peerPrekeys.absorbWire(hit.opened.sender, parsed.prekeys);
           }
+          await this.applyReceipt(hit.opened.sender.publicId, parsed.messageId);
+        }
 
-          // Ack only what asked to be acked, only in the one-to-one mode, and
-          // only to someone the user actually added.
-          //
-          // `conversationId === null` means this opened under our own identity —
-          // a direct message, or one copy of a group fan-out, which is the same
-          // thing on the wire. A channel hit is never acked even if the sender
-          // put an id in the body, so a hostile or buggy peer cannot talk us
-          // into announcing our presence in a channel.
-          //
-          // The `isAddedContact` gate is the important one: a receipt is a
-          // signed, timestamped liveness proof sealed straight back to the
-          // sender. Emitting one to anyone who direct-messages us turns the app
-          // into a presence oracle — an attacker who has our public id (off a
-          // poster, a leaked code) pings us and gets cryptographic confirmation
-          // this exact device is here and relaying. Gating on a relationship we
-          // chose, not on the wire format, is what channels already do; direct
-          // messages must be held to the same rule. Auto-filed senders (added=0)
-          // do not qualify, so a repeat ping cannot bootstrap itself into an ack.
-          if (
-            hit.conversationId === null &&
-            parsed.id &&
-            (await this.store.isAddedContact(sender))
-          ) {
-            await this.sendReceipt(hit.opened.sender, parsed.id);
-          }
-        }
-      } else if (parsed?.kind === 'receipt' && hit.conversationId === null) {
-        // A receipt is not itself acked. `packBody` is the only thing that ever
-        // sets a message id, and it is only ever called for text, so a receipt
-        // carries nothing to reply to and this branch never sends — which is
-        // what stops two phones acking each other's acks forever.
-        //
-        // Direct hits only. We never seal an ack to a channel key, so a receipt
-        // arriving through a channel is a member trying to acknowledge on a
-        // path we did not offer; the ledger would refuse it anyway, and there
-        // is no reason to run it.
-        if (parsed.prekeys) {
-          this.peerPrekeys.absorbWire(hit.opened.sender, parsed.prekeys);
-        }
-        await this.applyReceipt(hit.opened.sender.publicId, parsed.messageId);
+        // Still stored and relayed even though it was ours. Dropping it here
+        // would tell a traffic observer which device is the recipient.
+      } finally {
+        hit.opened.body.fill(0);
+        unpadded?.fill(0);
       }
-
-      // Still stored and relayed even though it was ours. Dropping it here
-      // would tell a traffic observer which device is the recipient.
     }
 
-    await this.store.storeEnvelope(envelope);
+    // A full carry cache must not prevent delivery to this device, but must
+    // prevent forwarding mail that we cannot retain for later reconciliation.
+    if (!(await this.store.storeEnvelope(envelope))) return;
     await this.refreshCarrying();
 
     if (envelope.hopCount + 1 >= envelope.maxHops) return;
@@ -733,7 +796,7 @@ export class MeshEngine {
     );
     const { public: agreement } = this.peerPrekeys.takeAgreementPublic(to);
     await this.inject(seal(this.identity, to, body, agreement));
-    this.onPrekeysChanged?.();
+    await this.onPrekeysChanged?.();
   }
 
   /**

@@ -19,7 +19,7 @@ import { describe, it } from 'node:test';
 import { fromBase64, toBase64, toUtf8 } from '../bytes';
 import type { Identity, PublicIdentity } from '../crypto-core';
 import { PUBLIC_CHANNEL_KEY, identityFromSeed, open, randomId, seal } from '../crypto-core';
-import { MeshEngine } from '../mesh';
+import { MAX_RECEIVED_PER_PEER, MeshEngine } from '../mesh';
 import type { Envelope } from '../protocol';
 import {
   DEFAULTS,
@@ -32,7 +32,7 @@ import {
 } from '../protocol';
 import type { MemoryStore } from '../store';
 import { createMemoryStore } from '../store';
-import type { Peer, Transport, TransportEvents } from '../transport';
+import type { Transport, TransportEvents } from '../transport';
 
 // ---------------------------------------------------------------------------
 // A fake radio
@@ -502,6 +502,87 @@ describe('dedup', () => {
         sentBefore,
         'A re-served already-delivered envelopes — request amplification is not bounded',
       );
+    }));
+});
+
+describe('ingress admission', () => {
+  it('counts junk against the session quota and resets only after disconnect', () =>
+    scenario(['A', 'B', 'C'], async ({ B, C }, world) => {
+      world.connect('A', 'B');
+      await world.settle();
+      const raw = toBase64(encodeEnvelope({
+        version: PROTOCOL_VERSION, type: EnvelopeType.Sealed,
+        id: fromBase64(randomId()), createdAt: Date.now(),
+        ttlSeconds: DEFAULTS.ttlSeconds, hopCount: 0, maxHops: 6,
+        payload: seal(C.identity, C.pub, pad(toUtf8('opaque relay test'))),
+      }));
+      for (let i = 0; i < MAX_RECEIVED_PER_PEER; i++) {
+        B.transport.fire('payload', 'A', '');
+      }
+      // A duplicate connection callback must not grant another packet budget.
+      B.transport.fire('connected', { id: 'A', name: 'A' });
+      B.transport.fire('payload', 'A', raw);
+      await world.settle();
+      assert.equal(B.store.envelopes.length, 0);
+      world.disconnect('A', 'B');
+      world.connect('A', 'B');
+      await world.settle();
+      B.transport.fire('payload', 'A', raw);
+      await world.settle();
+      assert.equal(B.store.envelopes.length, 1);
+    }));
+
+  it('drops oversized and disconnected payloads before they touch the dedup ledger', () =>
+    scenario(['A', 'B'], async ({ B }, world) => {
+      B.transport.fire('payload', 'unknown', 'AAAA');
+      world.connect('A', 'B');
+      await world.settle();
+      B.transport.fire('payload', 'A', 'A'.repeat(40_004));
+      await world.settle();
+      assert.deepEqual(B.store.seen, []);
+      assert.equal(B.store.envelopes.length, 0);
+    }));
+
+  it('marks outgoing mail failed and emits no sealed traffic when the cache refuses it', () =>
+    scenario(['A', 'B'], async ({ A, B }, world) => {
+      world.connect('A', 'B');
+      await world.settle();
+      A.store.storeEnvelope = async () => false;
+      await assert.rejects(A.engine.sendText(B.pub, 'no space'), /cache is full/);
+      await world.settle();
+      assert.equal(A.store.messages[0].state, 'failed');
+      assert.equal(relayed(A).length, 0);
+      assert.equal(inbox(B).length, 0);
+    }));
+
+  it('bounds concurrent packet work and resumes admission after the burst settles', () =>
+    scenario(['A', 'B'], async ({ B }, world) => {
+      world.connect('A', 'B');
+      await world.settle();
+      const packet = (n: number) => toBase64(encodeEnvelope({
+        version: PROTOCOL_VERSION, type: EnvelopeType.Sealed,
+        id: new Uint8Array(16).fill(n), createdAt: Date.now(),
+        ttlSeconds: DEFAULTS.ttlSeconds, hopCount: 0, maxHops: 6,
+        payload: new Uint8Array(300).fill(n),
+      }));
+      for (let i = 1; i <= 20; i++) B.transport.fire('payload', 'A', packet(i));
+      await world.settle();
+      assert.equal(B.store.envelopes.length, 8);
+      B.transport.fire('payload', 'A', packet(21));
+      await world.settle();
+      assert.equal(B.store.envelopes.length, 9);
+    }));
+
+  it('still delivers addressed mail locally when the carry cache is full', () =>
+    scenario(['A', 'B'], async ({ A, B }, world) => {
+      world.connect('A', 'B');
+      await world.settle();
+      B.store.storeEnvelope = async () => false;
+      await A.engine.sendText(B.pub, 'deliver without carrying');
+      await world.settle();
+      assert.equal(inbox(B)[0]?.text, 'deliver without carrying');
+      assert.equal(B.store.envelopes.length, 0);
+      assert.equal(relayed(B).length, 0);
     }));
 });
 

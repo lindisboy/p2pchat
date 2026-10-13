@@ -115,11 +115,7 @@ export default function NewGroupScreen() {
                         backgroundColor: on ? t.accentFill : 'transparent',
                       },
                     ]}>
-                    {on && (
-                      <Text style={{ color: t.onAccentFill, fontSize: 15, fontWeight: '700' }}>
-                        ✓
-                      </Text>
-                    )}
+                    {on && <View style={[styles.checkMark, { borderColor: t.onAccentFill }]} />}
                   </View>
                   <Text style={[Type.body, { color: t.text, flex: 1 }]} numberOfLines={1}>
                     {c.name}
@@ -175,5 +171,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  checkMark: {
+    width: 10,
+    height: 6,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    transform: [{ rotate: '-45deg' }],
+    marginTop: -2,
   },
 });

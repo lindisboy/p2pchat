@@ -13,7 +13,7 @@
  * derived from anything, because a service UUID is broadcast in the clear to
  * every radio in range and must therefore carry no information about the user.
  *
- * It IS a stable identifier of "this device is running protestchat", and that is
+ * It IS a stable identifier of "this device is running p2pchat", and that is
  * unavoidable: a mesh peer has to be findable by other mesh peers. See the
  * rotating-identifier note below for what we can and cannot hide.
  */

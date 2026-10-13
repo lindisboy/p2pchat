@@ -72,6 +72,7 @@ export class LocalPrekeys {
   private otks = new Map<string, LocalOtk>();
 
   load(spk: ReceiveKey[], otks: LocalOtk[]): void {
+    this.clear();
     this.spk = spk
       .map(cloneKey)
       .sort((a, b) => b.createdAt - a.createdAt);
@@ -117,13 +118,22 @@ export class LocalPrekeys {
   }
 
   sweep(now = Date.now()): number {
-    const beforeSpk = this.spk.length;
-    this.spk = this.spk.filter((k) => now - k.createdAt < RECEIVE_KEY_RETENTION_MS);
-    let wiped = beforeSpk - this.spk.length;
+    const keptSpk: ReceiveKey[] = [];
+    let wiped = 0;
+    for (const key of this.spk) {
+      if (now - key.createdAt >= RECEIVE_KEY_RETENTION_MS) {
+        wipeReceiveKey(key);
+        wiped++;
+      } else {
+        keptSpk.push(key);
+      }
+    }
+    this.spk = keptSpk;
 
     for (const [id, o] of [...this.otks]) {
       if (now - o.createdAt >= RECEIVE_KEY_RETENTION_MS) {
         this.otks.delete(id);
+        wipeReceiveKey(o);
         wiped++;
       }
     }
@@ -139,10 +149,20 @@ export class LocalPrekeys {
    */
   consumeOtk(agreementPublic: Uint8Array): boolean {
     const id = toBase64(agreementPublic);
-    if (!this.otks.has(id)) return false;
+    const key = this.otks.get(id);
+    if (!key) return false;
     this.otks.delete(id);
+    wipeReceiveKey(key);
     this.fillPool();
     return true;
+  }
+
+  /** Overwrites all retained key bytes before dropping the in-memory ring. */
+  clear(): void {
+    for (const key of this.spk) wipeReceiveKey(key);
+    for (const key of this.otks.values()) wipeReceiveKey(key);
+    this.spk = [];
+    this.otks.clear();
   }
 
   /**
@@ -224,6 +244,15 @@ export class PeerPrekeyBook {
   >();
 
   clear(): void {
+    for (const record of this.peers.values()) {
+      if (record.spk) {
+        record.spk.public.fill(0);
+        record.spk.signature.fill(0);
+      }
+      for (const otk of record.otks) {
+        otk.fill(0);
+      }
+    }
     this.peers.clear();
   }
 
@@ -423,4 +452,9 @@ function cloneKey(k: ReceiveKey): ReceiveKey {
     public: Uint8Array.from(k.public),
     createdAt: k.createdAt,
   };
+}
+
+function wipeReceiveKey(key: ReceiveKey): void {
+  key.secret.fill(0);
+  key.public.fill(0);
 }

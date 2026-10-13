@@ -2,7 +2,7 @@
  * Core types for the trust module.
  *
  * This module is completely standalone — zero imports from the rest of
- * protestchat. It depends only on @noble/curves and @noble/hashes.
+ * p2pchat. It depends only on @noble/curves and @noble/hashes.
  *
  * The trust module defines the identity and authorization model that the
  * rest of the app will conform to during integration.

@@ -13,7 +13,7 @@
  */
 
 import { Stack } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Bullets, Button, Card, Field, Input, Notice, Screen, Tag } from '@/components/ui';
@@ -22,8 +22,9 @@ import { useTheme } from '@/hooks/use-theme';
 import { type LanguagePreference, SUPPORTED_LANGUAGES } from '@/i18n/core';
 import { useI18n } from '@/i18n/provider';
 import { useApp } from '@/lib/app-state';
+import { hasAccessPin, saveAccessPins } from '@/lib/access-pin';
 
-const REPO_URL = 'https://github.com/ni5arga/protestchat';
+const REPO_URL = 'https://github.com/lindisboy/p2pchat';
 
 const LANGUAGE_NAMES: Record<Exclude<LanguagePreference, 'system'>, string> = {
   en: 'English',
@@ -40,6 +41,23 @@ export default function SettingsScreen() {
   const { displayName, setDisplayName, status, startRadio, stopRadio, panicWipe } = useApp();
   const [name, setName] = useState(displayName);
   const [languageError, setLanguageError] = useState<string | null>(null);
+  const [accessPin, setAccessPin] = useState('');
+  const [accessPinConfirm, setAccessPinConfirm] = useState('');
+  const [decoyPin, setDecoyPin] = useState('');
+  const [decoyPinConfirm, setDecoyPinConfirm] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinSaved, setPinSaved] = useState(false);
+  const [pinConfigured, setPinConfigured] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    void hasAccessPin().then((configured) => {
+      if (mounted) setPinConfigured(configured);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const limitations = [
     copy('settings.limitationUnlocked'),
@@ -51,6 +69,7 @@ export default function SettingsScreen() {
   const runWipe = async () => {
     try {
       await panicWipe();
+      setPinConfigured(await hasAccessPin());
     } catch (err) {
       // A wipe that did not fully complete must never pass silently — the user
       // may be about to hand this phone over believing it is clean.
@@ -72,6 +91,38 @@ export default function SettingsScreen() {
         { text: copy('common.deleteEverything'), style: 'destructive', onPress: () => void runWipe() },
       ],
     );
+
+  const savePins = async () => {
+    setPinError(null);
+    setPinSaved(false);
+    if ([accessPin, accessPinConfirm, decoyPin, decoyPinConfirm].some((value) => !/^\d{6}$/.test(value))) {
+      setPinError(copy('auth.pinLength'));
+      return;
+    }
+    if (accessPin !== accessPinConfirm || decoyPin !== decoyPinConfirm) {
+      setPinError(copy('auth.pinMismatch'));
+      return;
+    }
+    if (accessPin === decoyPin) {
+      setPinError(copy('auth.pinSame'));
+      return;
+    }
+    try {
+      await saveAccessPins(accessPin, decoyPin);
+      setAccessPin('');
+      setAccessPinConfirm('');
+      setDecoyPin('');
+      setDecoyPinConfirm('');
+      setPinSaved(true);
+      setPinConfigured(true);
+    } catch {
+      setAccessPin('');
+      setAccessPinConfirm('');
+      setDecoyPin('');
+      setDecoyPinConfirm('');
+      setPinError(copy('auth.saveError'));
+    }
+  };
 
   return (
     <Screen contentStyle={{ gap: Spacing.xl }}>
@@ -128,6 +179,66 @@ export default function SettingsScreen() {
           onPress={() => void setDisplayName(name)}
           disabled={name.trim() === displayName}
         />
+      </Card>
+
+      <Card style={{ gap: Spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}>
+          <Text accessibilityRole="header" style={[Type.bodyStrong, { color: t.text }]}>
+            {copy('auth.settingsTitle')}
+          </Text>
+          <Tag
+            tone={pinConfigured ? 'ok' : 'danger'}
+            label={pinConfigured ? copy('common.on') : copy('common.off')}
+          />
+        </View>
+        <Text style={[Type.callout, { color: t.textMuted }]}>{copy('auth.settingsDetail')}</Text>
+        <Field label={copy('auth.pinLabel')} hint={copy('auth.pinHint')}>
+          <Input
+            value={accessPin}
+            onChangeText={(value) => setAccessPin(value.replace(/\D/g, '').slice(0, 6))}
+            keyboardType="number-pad"
+            secureTextEntry
+            maxLength={6}
+          />
+        </Field>
+        <Field label={copy('auth.pinConfirmLabel')}>
+          <Input
+            value={accessPinConfirm}
+            onChangeText={(value) => setAccessPinConfirm(value.replace(/\D/g, '').slice(0, 6))}
+            keyboardType="number-pad"
+            secureTextEntry
+            maxLength={6}
+          />
+        </Field>
+        <Field label={copy('auth.decoyLabel')} hint={copy('auth.decoyHint')}>
+          <Input
+            value={decoyPin}
+            onChangeText={(value) => setDecoyPin(value.replace(/\D/g, '').slice(0, 6))}
+            keyboardType="number-pad"
+            secureTextEntry
+            maxLength={6}
+          />
+        </Field>
+        <Field label={copy('auth.decoyConfirmLabel')}>
+          <Input
+            value={decoyPinConfirm}
+            onChangeText={(value) => setDecoyPinConfirm(value.replace(/\D/g, '').slice(0, 6))}
+            keyboardType="number-pad"
+            secureTextEntry
+            maxLength={6}
+          />
+        </Field>
+        {!!pinError && (
+          <Text accessibilityRole="alert" style={[Type.caption, { color: t.tone.danger.fg }]}>
+            {pinError}
+          </Text>
+        )}
+        {pinSaved && (
+          <Text accessibilityRole="alert" style={[Type.caption, { color: t.text }]}>
+            {copy('auth.saved')}
+          </Text>
+        )}
+        <Button title={copy('auth.savePins')} variant="secondary" onPress={() => void savePins()} />
       </Card>
 
       <Card>
@@ -187,7 +298,7 @@ export default function SettingsScreen() {
           {copy('settings.openSource')}
         </Text>
         <Text style={[Type.caption, { color: t.accent, textAlign: 'center' }]}>
-          github.com/ni5arga/protestchat
+          github.com/lindisboy/p2pchat
         </Text>
       </Pressable>
     </Screen>

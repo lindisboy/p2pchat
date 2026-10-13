@@ -6,13 +6,21 @@
  * which is why every table has an expiry sweep and `wipeEverything()` exists.
  */
 
+import 'react-native-get-random-values';
+
+import * as SecureStore from 'expo-secure-store';
 import * as SQLite from 'expo-sqlite';
 
 import { fromBase64, toBase64 } from './bytes';
-import type { ReceiveKey, SignedReceiveKey } from './crypto-core';
-import { RECEIVE_KEY_RETENTION_MS } from './crypto-core';
+import { ADMIT_ENVELOPE_SQL, MAX_CARRY_BYTES } from './envelope-cache';
+import {
+  RECEIVE_KEY_RETENTION_MS,
+  decodeSignedReceiveKey,
+  encodeSignedReceiveKey,
+  type ReceiveKey,
+  type SignedReceiveKey,
+} from './crypto-core';
 import type { PersistedOtk } from './prekeys';
-import { decodeSignedReceiveKey, encodeSignedReceiveKey } from './crypto-core';
 import type { Envelope } from './protocol';
 import { decodeEnvelope, encodeEnvelope } from './protocol';
 import type { MeshStore, Message, MessageState } from './store';
@@ -49,14 +57,20 @@ export { MAX_LOCAL_RETENTION_MS, MESSAGE_RETENTION_MS };
  * On device that surfaced as `NullPointerException` out of prepareAsync and
  * execAsync — an error message that points nowhere near the actual cause.
  */
+const LEGACY_DATABASE_NAME = 'protestchat.db';
+const ENCRYPTED_DATABASE_NAME = 'protestchat.encrypted.db';
+const DATABASE_KEY_NAME = 'protestchat.database.key.v1';
+const DATABASE_MIGRATED_NAME = 'protestchat.database.sqlcipher.v1';
+
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+let prekeyWriteQueue: Promise<void> = Promise.resolve();
 
 export function getDb(): Promise<SQLite.SQLiteDatabase> {
   return (dbPromise ??= openAndMigrate());
 }
 
 async function openAndMigrate(): Promise<SQLite.SQLiteDatabase> {
-  const db = await SQLite.openDatabaseAsync('protestchat.db');
+  const db = await openEncryptedDatabase();
 
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
@@ -203,6 +217,131 @@ async function openAndMigrate(): Promise<SQLite.SQLiteDatabase> {
   await migrateContactsAdded(db);
 
   return db;
+}
+
+/** Opens the encrypted store, converting the legacy plaintext database once. */
+async function openEncryptedDatabase(): Promise<SQLite.SQLiteDatabase> {
+  const migrated = await SecureStore.getItemAsync(DATABASE_MIGRATED_NAME);
+  let keyB64 = await SecureStore.getItemAsync(DATABASE_KEY_NAME);
+
+  if (migrated === '1') {
+    if (!keyB64) {
+      throw new Error('The database key is missing. The encrypted database was left locked.');
+    }
+    const key = fromBase64(keyB64);
+    if (key.length !== 32) {
+      key.fill(0);
+      throw new Error('The database key has an invalid length.');
+    }
+    const db = await openKeyedDatabase(ENCRYPTED_DATABASE_NAME, key);
+    // A crash after setting the migration marker but before deleting the old
+    // file must not leave the plaintext source behind on the next launch.
+    try {
+      await deleteDatabaseIfPresent(LEGACY_DATABASE_NAME);
+      return db;
+    } catch (error) {
+      await db.closeAsync();
+      throw error;
+    }
+  }
+
+  if (!keyB64) {
+    const key = crypto.getRandomValues(new Uint8Array(32));
+    keyB64 = toBase64(key);
+    try {
+      await SecureStore.setItemAsync(DATABASE_KEY_NAME, keyB64, {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+      });
+    } finally {
+      key.fill(0);
+    }
+  }
+
+  const key = fromBase64(keyB64);
+  if (key.length !== 32) {
+    key.fill(0);
+    throw new Error('The database key has an invalid length.');
+  }
+  let legacy: SQLite.SQLiteDatabase;
+  try {
+    legacy = await SQLite.openDatabaseAsync(LEGACY_DATABASE_NAME);
+  } catch (error) {
+    key.fill(0);
+    throw error;
+  }
+  try {
+    const cipher = await legacy.getFirstAsync<{ cipher_version: string }>(
+      `PRAGMA cipher_version`,
+    );
+    if (!cipher?.cipher_version) {
+      throw new Error('SQLCipher is unavailable in this app build. Rebuild the native app.');
+    }
+
+    await legacy.execAsync(`PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode = DELETE;`);
+    // A previous interrupted export is disposable because the plaintext source
+    // remains intact until the verified encrypted copy is committed.
+    await deleteDatabaseIfPresent(ENCRYPTED_DATABASE_NAME);
+    const keyHex = [...key].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    const dir = SQLite.defaultDatabaseDirectory ? SQLite.defaultDatabaseDirectory.replace(/\/+$/, '') : '';
+    const encryptedPath = dir ? `${dir}/${ENCRYPTED_DATABASE_NAME}` : ENCRYPTED_DATABASE_NAME;
+    await legacy.execAsync(
+      `ATTACH DATABASE '${encryptedPath}' AS encrypted KEY "x'${keyHex}'";`,
+    );
+    try {
+      await legacy.getFirstAsync(`SELECT sqlcipher_export('encrypted')`);
+    } finally {
+      await legacy.execAsync(`DETACH DATABASE encrypted;`);
+    }
+  } catch (error) {
+    try {
+      await legacy.closeAsync();
+    } finally {
+      key.fill(0);
+    }
+    throw error;
+  }
+  await legacy.closeAsync();
+
+  const encrypted = await openKeyedDatabase(ENCRYPTED_DATABASE_NAME, key);
+  try {
+    await SecureStore.setItemAsync(DATABASE_MIGRATED_NAME, '1');
+    await deleteDatabaseIfPresent(LEGACY_DATABASE_NAME);
+    return encrypted;
+  } catch (error) {
+    await encrypted.closeAsync();
+    throw error;
+  }
+}
+
+async function openKeyedDatabase(
+  name: string,
+  key: Uint8Array,
+): Promise<SQLite.SQLiteDatabase> {
+  const db = await SQLite.openDatabaseAsync(name);
+  const keyHex = [...key].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  try {
+    await db.execAsync(`PRAGMA key = "x'${keyHex}'";`);
+    const cipher = await db.getFirstAsync<{ cipher_version: string }>(`PRAGMA cipher_version`);
+    if (!cipher?.cipher_version) {
+      throw new Error('SQLCipher is unavailable in this app build. Rebuild the native app.');
+    }
+    await db.getFirstAsync(`SELECT count(*) AS count FROM sqlite_master`);
+    return db;
+  } catch (error) {
+    await db.closeAsync();
+    throw error;
+  } finally {
+    key.fill(0);
+  }
+}
+
+async function deleteDatabaseIfPresent(name: string): Promise<void> {
+  try {
+    await SQLite.deleteDatabaseAsync(name);
+  } catch (error) {
+    if (error instanceof Error && /database .* not found/i.test(error.message)) return;
+    throw error;
+  }
 }
 
 /**
@@ -442,23 +581,26 @@ export async function markConversationRead(peerId: string): Promise<void> {
 // Envelope cache (store-and-forward)
 // ---------------------------------------------------------------------------
 
-export async function storeEnvelope(e: Envelope, isOurs = false): Promise<void> {
+export async function storeEnvelope(e: Envelope, isOurs = false): Promise<boolean> {
   const d = await getDb();
   const now = Date.now();
   const claimed = e.createdAt + e.ttlSeconds * 1000;
-
-  await d.runAsync(
-    `INSERT OR REPLACE INTO envelopes (id, raw, created_at, expires_at, hop_count, is_ours)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+  const raw = toBase64(encodeEnvelope(e));
+  await d.runAsync('DELETE FROM envelopes WHERE expires_at <= ?', [now]);
+  const result = await d.runAsync(
+    ADMIT_ENVELOPE_SQL,
     [
       toBase64(e.id),
-      toBase64(encodeEnvelope(e)),
+      raw,
       e.createdAt,
       Math.min(claimed, now + MAX_LOCAL_RETENTION_MS),
       e.hopCount,
       isOurs ? 1 : 0,
+      raw,
+      MAX_CARRY_BYTES,
     ],
   );
+  return result.changes === 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -692,20 +834,26 @@ export async function loadLocalPrekeys(): Promise<{ spk: ReceiveKey[]; otks: Per
 }
 
 export async function saveLocalPrekeys(spk: ReceiveKey[], otks: PersistedOtk[]): Promise<void> {
-  const d = await getDb();
-  await d.execAsync('DELETE FROM receive_keys; DELETE FROM one_time_keys;');
-  for (const k of spk) {
-    await d.runAsync(
-      `INSERT INTO receive_keys (public_b64, secret_b64, created_at) VALUES (?, ?, ?)`,
-      [toBase64(k.public), toBase64(k.secret), k.createdAt],
-    );
-  }
-  for (const o of otks) {
-    await d.runAsync(
-      `INSERT INTO one_time_keys (public_b64, secret_b64, created_at, issued_to) VALUES (?, ?, ?, ?)`,
-      [toBase64(o.public), toBase64(o.secret), o.createdAt, o.issuedTo],
-    );
-  }
+  const write = prekeyWriteQueue.then(async () => {
+    const d = await getDb();
+    await d.withTransactionAsync(async () => {
+      await d.execAsync('DELETE FROM receive_keys; DELETE FROM one_time_keys;');
+      for (const k of spk) {
+        await d.runAsync(
+          `INSERT INTO receive_keys (public_b64, secret_b64, created_at) VALUES (?, ?, ?)`,
+          [toBase64(k.public), toBase64(k.secret), k.createdAt],
+        );
+      }
+      for (const o of otks) {
+        await d.runAsync(
+          `INSERT INTO one_time_keys (public_b64, secret_b64, created_at, issued_to) VALUES (?, ?, ?, ?)`,
+          [toBase64(o.public), toBase64(o.secret), o.createdAt, o.issuedTo],
+        );
+      }
+    });
+  });
+  prekeyWriteQueue = write.catch(() => {});
+  await write;
 }
 
 export async function savePeerPrekeys(
@@ -785,8 +933,8 @@ export async function wipeEverything(): Promise<void> {
   // cleared" — never a silent half-wipe where, say, messages are gone but
   // contacts remain. If the transaction throws it rolls back and the caller
   // (panicWipe) surfaces the failure rather than reporting a clean device.
-  await d.withExclusiveTransactionAsync(async (tx) => {
-    await tx.execAsync(`
+  await d.withTransactionAsync(async () => {
+    await d.execAsync(`
       DELETE FROM messages;
       DELETE FROM message_recipients;
       DELETE FROM envelopes;
@@ -806,4 +954,116 @@ export async function wipeEverything(): Promise<void> {
   // slack space. It cannot run inside a transaction, and it is best-effort:
   // the rows are already gone, so a VACUUM failure is not a failed wipe.
   await d.execAsync(`VACUUM;`).catch(() => {});
+}
+
+/** Cryptographically erases the database, then provisions a fresh database key. */
+export async function destroyDatabase(): Promise<void> {
+  await prekeyWriteQueue;
+  const pending = dbPromise;
+  dbPromise = null;
+  if (pending) {
+    try {
+      const d = await pending;
+      try {
+        await d.execAsync('PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode = DELETE;');
+      } catch {
+        // Continue if checkpoint fails.
+      }
+      await d.closeAsync();
+    } catch {
+      // Continue to remove the key even if opening or closing the handle failed.
+    }
+  }
+
+  // Remove the wrapping key before deleting the encrypted file. If file
+  // deletion is interrupted, its contents remain inaccessible.
+  const failures: string[] = [];
+  const remove = async (label: string, action: () => Promise<unknown>) => {
+    try {
+      await action();
+    } catch {
+      failures.push(label);
+    }
+  };
+  await remove('database key', () => SecureStore.deleteItemAsync(DATABASE_KEY_NAME));
+  await remove('encrypted database', () => deleteDatabaseIfPresent(ENCRYPTED_DATABASE_NAME));
+  await remove('legacy database', () => deleteDatabaseIfPresent(LEGACY_DATABASE_NAME));
+  if (failures.length > 0) throw new Error(`Could not remove ${failures.join(', ')}.`);
+
+  const freshKey = crypto.getRandomValues(new Uint8Array(32));
+  try {
+    await SecureStore.setItemAsync(DATABASE_KEY_NAME, toBase64(freshKey), {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
+  } finally {
+    freshKey.fill(0);
+  }
+}
+
+/** Removes database keys and files without opening or recreating the database. */
+export async function eraseDatabaseForDuress(): Promise<void> {
+  const pending = dbPromise;
+  dbPromise = null;
+  if (pending) {
+    try {
+      const d = await pending;
+      try {
+        await d.execAsync('PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode = DELETE;');
+      } catch {
+        // Continue to close and wipe even if checkpoint fails.
+      }
+      await d.closeAsync();
+    } catch {
+      // Continue to key deletion even when an open handle cannot be closed.
+    }
+  } else {
+    // Checkpoint any durable WAL contents while the wrapping key is still
+    // available. A closed or damaged database does not stop the key deletion.
+    try {
+      const keyB64 = await SecureStore.getItemAsync(DATABASE_KEY_NAME);
+      if (keyB64) {
+        const key = fromBase64(keyB64);
+        if (key.length === 32) {
+          let d: SQLite.SQLiteDatabase | null = null;
+          try {
+            d = await openKeyedDatabase(ENCRYPTED_DATABASE_NAME, key);
+            await d.execAsync('PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode = DELETE;');
+          } catch {
+            // The key and files are still deleted below if checkpointing fails.
+          } finally {
+            key.fill(0);
+            if (d) await d.closeAsync().catch(() => {});
+          }
+        } else {
+          key.fill(0);
+        }
+      }
+    } catch {
+      // Continue to remove the key and database files.
+    }
+  }
+
+  const failures: string[] = [];
+  const attempt = async (label: string, action: () => Promise<unknown>): Promise<boolean> => {
+    try {
+      await action();
+      return true;
+    } catch {
+      failures.push(label);
+      return false;
+    }
+  };
+
+  const keyRemoved = await attempt('database key', () => SecureStore.deleteItemAsync(DATABASE_KEY_NAME));
+  const encryptedRemoved = await attempt('encrypted database', () =>
+    deleteDatabaseIfPresent(ENCRYPTED_DATABASE_NAME),
+  );
+  await attempt('legacy database', () => deleteDatabaseIfPresent(LEGACY_DATABASE_NAME));
+  if (keyRemoved && encryptedRemoved) {
+    await attempt('database migration marker', () =>
+      SecureStore.deleteItemAsync(DATABASE_MIGRATED_NAME),
+    );
+  }
+
+  if (failures.length > 0) throw new Error(`Could not remove ${failures.join(', ')}.`);
 }

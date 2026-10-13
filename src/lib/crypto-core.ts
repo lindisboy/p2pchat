@@ -116,7 +116,7 @@ export type SignedReceiveKey = {
 // ---------------------------------------------------------------------------
 
 export function identityFromSeed(seed: Uint8Array): Identity {
-  const edSecret = seed;
+  const edSecret = Uint8Array.from(seed);
   const edPublic = ed25519.getPublicKey(edSecret);
 
   // Derive the agreement key from the same seed rather than storing a second
@@ -131,6 +131,12 @@ export function identityFromSeed(seed: Uint8Array): Identity {
     xPublic,
     publicId: toBase64(concat(edPublic, xPublic)),
   };
+}
+
+/** Overwrites long-term secret key buffers before discarding identity. */
+export function wipeIdentity(identity: Identity): void {
+  identity.edSecret.fill(0);
+  identity.xSecret.fill(0);
 }
 
 export function parsePublicId(publicId: string): PublicIdentity | null {
@@ -241,23 +247,32 @@ export function seal(
   }
 
   const ephSecret = x25519.utils.randomSecretKey();
-  const ephPublic = x25519.getPublicKey(ephSecret);
-  const shared = x25519.getSharedSecret(ephSecret, agreementPublic);
-  const key = sealKey(ephPublic, shared, agreementPublic);
+  let shared: Uint8Array | undefined;
+  let key: Uint8Array | undefined;
+  let inner: Uint8Array | undefined;
+  try {
+    const ephPublic = x25519.getPublicKey(ephSecret);
+    shared = x25519.getSharedSecret(ephSecret, agreementPublic);
+    key = sealKey(ephPublic, shared, agreementPublic);
 
-  // Sign over the context, the ephemeral key, the agreement key and the body.
-  // Including agreementPublic ties the signature to this seal target so a
-  // signature cannot be lifted into an envelope sealed to a different key.
-  const signature = ed25519.sign(
-    concat(SIG_CONTEXT, ephPublic, agreementPublic, body),
-    sender.edSecret,
-  );
+    // Sign over the context, the ephemeral key, the agreement key and the body.
+    // Including agreementPublic ties the signature to this seal target so a
+    // signature cannot be lifted into an envelope sealed to a different key.
+    const signature = ed25519.sign(
+      concat(SIG_CONTEXT, ephPublic, agreementPublic, body),
+      sender.edSecret,
+    );
 
-  const inner = concat(sender.edPublic, sender.xPublic, signature, body);
-  const nonce = randomBytes(NONCE_LEN);
-  const ciphertext = xchacha20poly1305(key, nonce).encrypt(inner);
-
-  return concat(ephPublic, nonce, ciphertext);
+    inner = concat(sender.edPublic, sender.xPublic, signature, body);
+    const nonce = randomBytes(NONCE_LEN);
+    const ciphertext = xchacha20poly1305(key, nonce).encrypt(inner);
+    return concat(ephPublic, nonce, ciphertext);
+  } finally {
+    ephSecret.fill(0);
+    shared?.fill(0);
+    key?.fill(0);
+    inner?.fill(0);
+  }
 }
 
 /**
@@ -298,18 +313,21 @@ function tryOpenWithSecret(
   ciphertext: Uint8Array,
   agreementSecret: Uint8Array,
 ): OpenedMessage | null {
+  let shared: Uint8Array | undefined;
+  let key: Uint8Array | undefined;
+  let inner: Uint8Array | undefined;
   try {
     const agreementPublic = x25519.getPublicKey(agreementSecret);
-    const shared = x25519.getSharedSecret(agreementSecret, ephPublic);
-    const key = sealKey(ephPublic, shared, agreementPublic);
+    shared = x25519.getSharedSecret(agreementSecret, ephPublic);
+    key = sealKey(ephPublic, shared, agreementPublic);
 
     // Throws on AEAD failure — the common case for mail that is not ours.
-    const inner = xchacha20poly1305(key, nonce).decrypt(ciphertext);
+    inner = xchacha20poly1305(key, nonce).decrypt(ciphertext);
 
-    const senderEd = inner.subarray(0, 32);
-    const senderX = inner.subarray(32, 64);
+    const senderEd = inner.slice(0, 32);
+    const senderX = inner.slice(32, 64);
     const signature = inner.subarray(64, 128);
-    const body = inner.subarray(128);
+    const body = inner.slice(128);
 
     const ok = ed25519.verify(
       signature,
@@ -329,6 +347,10 @@ function tryOpenWithSecret(
     };
   } catch {
     return null;
+  } finally {
+    shared?.fill(0);
+    key?.fill(0);
+    inner?.fill(0);
   }
 }
 

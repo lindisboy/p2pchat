@@ -6,12 +6,17 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors, Type } from '@/constants/theme';
 import { useIsDark } from '@/hooks/use-theme';
 import { I18nProvider, useI18n } from '@/i18n/provider';
+import { AccessGate } from '@/components/access-gate';
 import { AppProvider } from '@/lib/app-state';
 
 export default function RootLayout() {
   return (
     <I18nProvider>
-      <LocalizedLayout />
+      <SafeAreaProvider>
+        <AccessGate>
+          <LocalizedLayout />
+        </AccessGate>
+      </SafeAreaProvider>
     </I18nProvider>
   );
 }
@@ -22,17 +27,19 @@ function LocalizedLayout() {
   const { t: copy } = useI18n();
 
   return (
-    <SafeAreaProvider>
-      {/* KeyboardProvider reads the real IME window-inset animation natively.
+      <KeyboardProvider>
+        {/* KeyboardProvider reads the real IME window-inset animation natively.
           Under Android edge-to-edge the window does not resize and the RN
           Keyboard JS events do not reliably report the IME, so this is the only
           thing that actually moves the composer above the keyboard. */}
-      <KeyboardProvider>
         <AppProvider>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: t.bg },
+            // The native stack owns the system bar while a route is focused.
+            // Set its icon contrast with the same resolved theme as the screen.
+            statusBarStyle: isDark ? 'light' : 'dark',
             headerTintColor: t.accent,
             headerTitleStyle: {
               color: t.text,
@@ -49,8 +56,7 @@ function LocalizedLayout() {
             animation: 'slide_from_right',
             animationDuration: 220,
           }}>
-          {/* Home draws its own header so the status banner can be the first
-              thing on the screen rather than the second. */}
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="chat/[id]" options={{ title: '' }} />
           <Stack.Screen name="contact/[id]" options={{ title: copy('contact.editTitle') }} />
@@ -71,6 +77,5 @@ function LocalizedLayout() {
         </Stack>
         </AppProvider>
       </KeyboardProvider>
-    </SafeAreaProvider>
   );
 }

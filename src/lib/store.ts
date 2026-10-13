@@ -16,6 +16,7 @@
  */
 
 import { fromBase64, toBase64 } from './bytes';
+import { MAX_CARRY_BYTES } from './envelope-cache';
 import type { Envelope } from './protocol';
 import { decodeEnvelope, encodeEnvelope } from './protocol';
 
@@ -72,7 +73,8 @@ export const SEEN_RETENTION_MS = 7 * 24 * 3600 * 1000;
 export interface MeshStore {
   sweepExpired(): Promise<void>;
   envelopeIds(): Promise<string[]>;
-  storeEnvelope(e: Envelope, isOurs?: boolean): Promise<void>;
+  /** False for a duplicate or a full cache. Does not evict existing mail. */
+  storeEnvelope(e: Envelope, isOurs?: boolean): Promise<boolean>;
   getEnvelopesByIds(ids: string[]): Promise<Envelope[]>;
   /** Returns true only the first time an id is presented. The dedup primitive. */
   markSeen(idB64: string): Promise<boolean>;
@@ -149,7 +151,10 @@ export interface MemoryStore extends MeshStore {
   markContactAdded(publicId: string): void;
 }
 
-export function createMemoryStore(now: () => number = Date.now): MemoryStore {
+export function createMemoryStore(
+  now: () => number = Date.now,
+  maxCarryBytes: number = MAX_CARRY_BYTES,
+): MemoryStore {
   const envelopes = new Map<string, StoredEnvelope>();
   const messages = new Map<string, Message>();
   /**
@@ -197,11 +202,15 @@ export function createMemoryStore(now: () => number = Date.now): MemoryStore {
 
     async storeEnvelope(e, isOurs = false) {
       const t = now();
+      for (const [id, row] of envelopes) if (row.expiresAt <= t) envelopes.delete(id);
       const claimed = e.createdAt + e.ttlSeconds * 1000;
       const id = toBase64(e.id);
+      const raw = toBase64(encodeEnvelope(e));
+      const bytes = [...envelopes.values()].reduce((sum, row) => sum + row.raw.length, 0);
+      if (envelopes.has(id) || bytes + raw.length > maxCarryBytes) return false;
       envelopes.set(id, {
         id,
-        raw: toBase64(encodeEnvelope(e)),
+        raw,
         createdAt: e.createdAt,
         // Same first-sight cap as db.ts: a peer that inflates ttlSeconds must
         // not be able to make us hoard its traffic.
@@ -209,6 +218,7 @@ export function createMemoryStore(now: () => number = Date.now): MemoryStore {
         hopCount: e.hopCount,
         isOurs,
       });
+      return true;
     },
 
     async getEnvelopesByIds(ids) {

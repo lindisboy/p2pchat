@@ -58,6 +58,8 @@ describe('prekey bundles', () => {
 
     // SPK-only keeps the plaque scannable in a crowd (~104 bytes of key material).
     const code = encodeContactCode(bob.publicId, bundle);
+    assert.ok(code.startsWith('p2pchat:v2:'));
+    assert.ok(decodeContactCode(code.replace(/^p2pchat:/, 'protestchat:'))?.bundle);
     assert.ok(code.length < 400, `QR payload too large: ${code.length}`);
 
     const v1 = decodeContactCode(`protestchat:${bob.publicId}`);

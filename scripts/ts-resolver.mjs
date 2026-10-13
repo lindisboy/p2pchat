@@ -9,8 +9,23 @@
 
 import { registerHooks } from 'node:module';
 
+const mockSecureStore = new URL(
+  '../src/lib/__tests__/mocks/expo-secure-store.ts',
+  import.meta.url,
+).href;
+const mockRandomValues = new URL(
+  '../src/lib/__tests__/mocks/react-native-get-random-values.ts',
+  import.meta.url,
+).href;
+
 registerHooks({
   resolve(specifier, context, next) {
+    if (specifier === 'expo-secure-store') {
+      return next(mockSecureStore, context);
+    }
+    if (specifier === 'react-native-get-random-values') {
+      return next(mockRandomValues, context);
+    }
     if (specifier.startsWith('.')) {
       for (const candidate of [`${specifier}.ts`, `${specifier}.tsx`, `${specifier}/index.ts`]) {
         try {

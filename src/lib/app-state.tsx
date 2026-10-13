@@ -34,6 +34,7 @@ import {
   parsePublicId,
   randomId,
   safetyNumber,
+  wipeIdentity,
 } from './crypto';
 import * as db from './db';
 import type { MeshStatus } from './mesh';
@@ -115,15 +116,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const local = localPrekeysRef.current;
     local.ensureReady();
     const snap = local.snapshot();
-    await db.saveLocalPrekeys(snap.spk, snap.otks);
-    await db.savePeerPrekeys(peerPrekeysRef.current.snapshot());
+    try {
+      await db.saveLocalPrekeys(snap.spk, snap.otks);
+      await db.savePeerPrekeys(peerPrekeysRef.current.snapshot());
+    } finally {
+      wipePrekeySnapshot(snap.spk, snap.otks);
+    }
     mesh.setLocalPrekeys(local);
     mesh.setPeerPrekeys(peerPrekeysRef.current);
     const bundle = local.bundleForQr(id);
     setContactCode(encodeContactCode(id.publicId, bundle));
     // bundleForQr is SPK-only, but ensureReady/fillPool may have minted keys.
     const after = local.snapshot();
-    await db.saveLocalPrekeys(after.spk, after.otks);
+    try {
+      await db.saveLocalPrekeys(after.spk, after.otks);
+    } finally {
+      wipePrekeySnapshot(after.spk, after.otks);
+    }
   }, []);
 
   const refresh = useCallback(async () => {
@@ -157,7 +166,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!storedName) await SecureStore.setItemAsync(NAME_KEY, name);
 
       const stored = await db.loadLocalPrekeys();
-      localPrekeysRef.current.load(stored.spk, stored.otks);
+      try {
+        localPrekeysRef.current.load(stored.spk, stored.otks);
+      } finally {
+        wipePrekeySnapshot(stored.spk, stored.otks);
+      }
       peerPrekeysRef.current.load(await db.loadPeerPrekeys());
 
       if (cancelled) return;
@@ -167,7 +180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       mesh.onPrekeysChanged = () => {
         const cur = identityRef.current;
-        if (cur) void persistPrekeys(cur);
+        return cur ? persistPrekeys(cur) : Promise.resolve();
       };
 
       await persistPrekeys(id);
@@ -366,6 +379,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // destructive step is independent and best-effort; failures are collected
     // and surfaced rather than swallowed as an unhandled rejection.
     const failures: string[] = [];
+    setReady(false);
+    setName('');
     const wipeStep = async (label: string, fn: () => Promise<unknown>) => {
       try {
         await fn();
@@ -381,14 +396,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // sealed traffic arriving in that window can still open and file into a
     // freshly wiped database (#55). dropSecrets is sync and never throws.
     mesh.dropSecrets();
-    await wipeStep('messages and keys', () => db.wipeEverything());
+    localPrekeysRef.current.clear();
+    await wipeStep('messages and keys', () => db.destroyDatabase());
     // Quiet the radio last — most likely step to hang on a wedged BLE stack.
     await wipeStep('radio', () => mesh.stop());
 
     // Drop app-level in-memory secrets regardless of what threw above.
-    identityRef.current = null;
+    if (identityRef.current) {
+      wipeIdentity(identityRef.current);
+      identityRef.current = null;
+    }
     setIdentity(null);
+    for (const channel of channels) channel.key.fill(0);
+    setChannels([]);
+    setConversations([]);
+    setContacts([]);
+    setGroups([]);
+    setContactCode('');
+    localPrekeysRef.current.clear();
     localPrekeysRef.current = new LocalPrekeys();
+    peerPrekeysRef.current.clear();
     peerPrekeysRef.current = new PeerPrekeyBook();
     mesh.setPeerPrekeys(peerPrekeysRef.current);
 
@@ -401,6 +428,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // The device is verifiably clean: hand the user a fresh identity so the app
     // is usable again. A failure here is a provisioning problem, not a wipe that
     // leaked, so it surfaces on its own.
+    await db.getDb();
     await db.upsertChannel(PUBLIC_CHANNEL_NAME, PUBLIC_CHANNEL_NAME, 'public', PUBLIC_CHANNEL_KEY);
     const fresh = await loadOrCreateIdentity();
     const freshName = shortName(fresh.publicId);
@@ -410,8 +438,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setName(freshName);
     await persistPrekeys(fresh);
     await refresh();
+    setReady(true);
     await mesh.start(fresh, freshName).catch(() => {});
-  }, [refresh, persistPrekeys]);
+  }, [refresh, persistPrekeys, channels]);
 
   const value = useMemo<AppContextValue>(
     () => ({
@@ -479,4 +508,14 @@ export function useApp(): AppContextValue {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error('useApp must be used inside <AppProvider>');
   return ctx;
+}
+
+function wipePrekeySnapshot(
+  spk: { public: Uint8Array; secret: Uint8Array }[],
+  otks: { public: Uint8Array; secret: Uint8Array }[],
+): void {
+  for (const key of [...spk, ...otks]) {
+    key.secret.fill(0);
+    key.public.fill(0);
+  }
 }

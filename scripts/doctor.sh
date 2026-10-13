@@ -15,7 +15,7 @@ fix()  { printf '      → %s\n' "$1"; }
 
 FAILED=0
 echo
-echo "protestchat build doctor"
+echo "p2pchat build doctor"
 echo
 
 # ---------------------------------------------------------------- iOS --------

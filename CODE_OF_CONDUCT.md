@@ -60,7 +60,7 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement (repository
-maintainers, starting with [@ni5arga](https://github.com/ni5arga)).
+maintainers, starting with [@lindisboy](https://github.com/lindisboy)).
 
 All complaints will be reviewed and investigated promptly and fairly.
 

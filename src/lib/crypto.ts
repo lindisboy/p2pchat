@@ -29,13 +29,24 @@ const SEED_KEY = 'protestchat.identity.seed.v1';
  */
 export async function loadOrCreateIdentity(): Promise<Identity> {
   const existing = await SecureStore.getItemAsync(SEED_KEY);
-  if (existing) return identityFromSeed(fromBase64(existing));
+  if (existing) {
+    const seed = fromBase64(existing);
+    try {
+      return identityFromSeed(seed);
+    } finally {
+      seed.fill(0);
+    }
+  }
 
   const seed = crypto.getRandomValues(new Uint8Array(32));
-  await SecureStore.setItemAsync(SEED_KEY, toBase64(seed), {
-    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-  });
-  return identityFromSeed(seed);
+  try {
+    await SecureStore.setItemAsync(SEED_KEY, toBase64(seed), {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
+    return identityFromSeed(seed);
+  } finally {
+    seed.fill(0);
+  }
 }
 
 /** Destroys the identity. Callers must also drop any in-memory copy. */

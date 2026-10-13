@@ -60,7 +60,7 @@ module.exports = function withDevelopmentTeam(config) {
       // Only the app target's configs, identified by its bundle id, so we do
       // not accidentally sign the Pods project or other targets.
       const bundleId = settings.PRODUCT_BUNDLE_IDENTIFIER;
-      if (typeof bundleId === 'string' && bundleId.includes('protestchat')) {
+      if (typeof bundleId === 'string' && bundleId === cfg.ios?.bundleIdentifier) {
         settings.DEVELOPMENT_TEAM = teamId;
         settings.CODE_SIGN_STYLE = 'Automatic';
       }
